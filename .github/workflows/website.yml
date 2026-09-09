@@ -12,6 +12,13 @@ concurrency:
   group: website-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  container:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -t payment-risk-website:scan web
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with: {image-ref: 'payment-risk-website:scan', severity: 'HIGH,CRITICAL', exit-code: '1', ignore-unfixed: true}
   build:
     runs-on: ubuntu-24.04
     steps:

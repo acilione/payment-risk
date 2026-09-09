@@ -27,6 +27,7 @@ jobs:
         run: |
           docker tag payment-risk:scan payment-risk:0.1.0
           python3 scripts/init-env.py
+          docker compose build website
           docker compose up -d --no-build
           make run-job integration-test recovery-test stop-job restore integration-test idle-resume-test verify-observability
       - name: Publish the same qualified image

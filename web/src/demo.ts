@@ -36,8 +36,10 @@ export const ruleCatalog = [
 export function demoOverview(window: WindowKey): Overview {
   const now = Date.now();
   const span = { "15m": 900000, "1h": 3600000, "24h": 86400000 }[window];
+  const bucket = span / 30;
+  const lastBucket = Math.floor(now / bucket) * bucket;
   const series = Array.from({ length: 30 }, (_, i) => ({
-    time: now - span + (i * span) / 29,
+    time: lastBucket - (29 - i) * bucket,
     approved: Math.round(
       210 +
         Math.sin(i * 0.55) * 55 +
@@ -72,8 +74,8 @@ export function demoOverview(window: WindowKey): Overview {
       matched_rules,
       reason_codes: matched_rules.map((id) => `${id}_MATCH`),
       rules_fingerprint: "demo-illustrative-policy-7d29c3a1",
-      event_time: now - i * 37000 - 14000,
-      processed_at: now - i * 37000,
+      event_time: now - (i * span) / 60 - 14000,
+      processed_at: now - (i * span) / 60,
       source_partition: i % 3,
       source_offset: 128400 + i,
     };

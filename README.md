@@ -35,10 +35,11 @@ make generate-load
 ```bash
 docker build --secret id=maven_truststore,src=/etc/ssl/certs/java/cacerts \
   -f infrastructure/docker/Dockerfile -t payment-risk:0.1.0 .
+docker compose build website
 docker compose up -d --no-build
 ```
 
-Alternatively, `make image-local` packages the tested host-built JAR into the same runtime image, avoiding Maven downloads inside Docker. Then use `docker compose up -d --no-build`.
+Alternatively, `make image-local` packages the tested host-built JAR into the same runtime image, avoiding Maven downloads inside Docker. Build the website with `docker compose build website`, then use `docker compose up -d --no-build`.
 
 | Service | Local endpoint |
 |---|---|

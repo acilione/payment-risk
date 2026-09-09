@@ -43,6 +43,6 @@ npm --prefix web run preview
 
 ## Verification and updates
 
-`make website-check` runs backend boundary tests, TypeScript checking, and a production build. `scripts/verify-website.py` uses Playwright to verify live readings (unless `--static`), demo navigation, filters, search, dialogs, keyboard dismissal, and mobile overflow. CI builds the static demo, runs these browser checks, and deploys it through GitHub Pages. Screenshots are labeled demo evidence.
+`make website-check` runs backend boundary tests, TypeScript checking, and a production build. `scripts/verify-website.py` uses Playwright to verify live readings (unless `--static`), demo navigation, filters, search, dialogs, keyboard dismissal, and mobile overflow. CI builds the static demo, runs these browser checks, and deploys it through GitHub Pages. A separate job builds and scans the operational website image for fixable HIGH/CRITICAL vulnerabilities. Screenshots are labeled demo evidence.
 
 Dependencies are locked in `web/package-lock.json`; Dependabot covers npm and the container. The runtime image is pinned to the latest published Node 24 LTS Docker release verified during implementation, 24.20.0, including its immutable manifest digest. Node 24.21.0 had been released upstream but its official container tag was not yet published. Release sources: [Node](https://github.com/nodejs/node/releases), [official container manifest](https://github.com/docker-library/official-images/blob/master/library/node), [React](https://react.dev/versions), [Vite](https://vite.dev/guide/).
