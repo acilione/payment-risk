@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule: {interval: weekly}
+    groups:
+      frontend: {patterns: ['react*', '@types/react*', 'vite', '@vitejs/*', 'typescript']}
+  - package-ecosystem: docker
+    directory: /web
+    schedule: {interval: weekly}
+  - package-ecosystem: maven
+    directory: /
+    schedule: {interval: weekly}
+    groups:
+      flink: {patterns: ['org.apache.flink*']}
+      junit: {patterns: ['org.junit*']}
+  - package-ecosystem: docker
+    directory: /infrastructure/docker
+    schedule: {interval: weekly}
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: terraform
+    directory: /infrastructure/terraform
+    schedule: {interval: weekly}

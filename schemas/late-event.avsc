@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "LateEvent",
+  "namespace": "com.portfolio.paymentrisk.avro",
+  "fields": [
+    {
+      "name": "transaction",
+      "type": "string"
+    },
+    {
+      "name": "customer_id",
+      "type": "string"
+    },
+    {
+      "name": "watermark",
+      "type": "long"
+    },
+    {
+      "name": "lateness_ms",
+      "type": "long"
+    },
+    {
+      "name": "observed_at",
+      "type": "long"
+    },
+    {
+      "name": "reason",
+      "type": "string"
+    }
+  ]
+}

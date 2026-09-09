@@ -1,0 +1,77 @@
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.image) }}
+{{- fail "image must be an immutable repository@sha256 digest" }}
+{{- end }}
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  image: {{ .Values.image | quote }}
+  flinkVersion: v2_2
+  serviceAccount: {{ .Release.Name }}
+  flinkConfiguration:
+    high-availability.type: kubernetes
+    high-availability.storageDir: s3://{{ required "checkpointBucket required" .Values.checkpointBucket }}/ha
+    state.backend.type: rocksdb
+    state.backend.incremental: 'true'
+    execution.checkpointing.storage: filesystem
+    execution.checkpointing.dir: s3://{{ .Values.checkpointBucket }}/checkpoints
+    execution.checkpointing.savepoint-dir: s3://{{ .Values.checkpointBucket }}/savepoints
+    execution.checkpointing.interval: 30s
+    execution.checkpointing.timeout: 2min
+    execution.checkpointing.min-pause: 10s
+    execution.checkpointing.max-concurrent-checkpoints: '1'
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+    taskmanager.numberOfTaskSlots: '2'
+    restart-strategy.type: fixed-delay
+    restart-strategy.fixed-delay.attempts: '10'
+    restart-strategy.fixed-delay.delay: 10s
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    metrics.reporter.prom.port: '9249'
+  jobManager:
+    resource: {memory: 2048m, cpu: 1}
+  taskManager:
+    replicas: {{ .Values.replicas }}
+    resource: {memory: 4096m, cpu: 2}
+  podTemplate:
+    metadata:
+      labels: {app.kubernetes.io/name: payment-risk}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9249'
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 9999
+        fsGroup: 9999
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: flink-main-container
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          env:
+            - {name: APP_ENVIRONMENT, value: production}
+            - {name: KAFKA_BOOTSTRAP_SERVERS, value: {{ required "bootstrapServers required" .Values.bootstrapServers | quote }}}
+            - {name: SCHEMA_REGISTRY_URL, value: {{ required "schemaRegistryUrl required" .Values.schemaRegistryUrl | quote }}}
+            - {name: STARTUP_OFFSETS, value: committed}
+            - {name: TRANSACTIONAL_PREFIX, value: {{ required "transactionalPrefix required" .Values.transactionalPrefix | quote }}}
+            - {name: KAFKA_PROPERTIES_FILE, value: /etc/risk/kafka.properties}
+          envFrom:
+            - secretRef: {name: {{ .Values.existingSecret }}}
+          volumeMounts:
+            - {name: credentials, mountPath: /etc/risk, readOnly: true}
+      volumes:
+        - name: credentials
+          secret: {secretName: {{ .Values.existingSecret }}}
+  job:
+    jarURI: local:///opt/flink/usrlib/risk-engine.jar
+    entryClass: com.portfolio.paymentrisk.PaymentRiskJob
+    parallelism: {{ .Values.parallelism }}
+    upgradeMode: savepoint
+    state: running
+    allowNonRestoredState: false
+    {{- if .Values.initialSavepointPath }}
+    initialSavepointPath: {{ .Values.initialSavepointPath | quote }}
+    {{- end }}

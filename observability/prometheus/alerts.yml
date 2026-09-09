@@ -1,0 +1,31 @@
+groups:
+  - name: payment-risk
+    rules:
+      - alert: FlinkMetricsUnavailable
+        expr: up{job="flink"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Flink metrics endpoint is unavailable
+          runbook: docs/operations-runbook.md
+      - alert: FlinkCheckpointStalled
+        expr: time() - flink_jobmanager_job_lastCheckpointCompletedTimestamp / 1000 > 180
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: No completed checkpoint for more than three minutes
+      - alert: RiskInvalidInput
+        expr: sum(rate(flink_taskmanager_job_task_operator_risk_transactions_invalid_total[5m])) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: Invalid payment rate exceeds one event per second}
+      - alert: RiskLateInput
+        expr: sum(rate(flink_taskmanager_job_task_operator_risk_transactions_late_total[5m])) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: Late payment rate exceeds one event per second}
+      - alert: FlinkBackpressure
+        expr: flink_taskmanager_job_task_backPressuredTimeMsPerSecond > 500
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: Flink task is backpressured for more than half its time}

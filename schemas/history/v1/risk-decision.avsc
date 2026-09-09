@@ -1,0 +1,65 @@
+{
+  "type": "record",
+  "name": "RiskDecision",
+  "namespace": "com.portfolio.paymentrisk.avro",
+  "fields": [
+    {
+      "name": "decision_id",
+      "type": "string"
+    },
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "transaction_id",
+      "type": "string"
+    },
+    {
+      "name": "customer_id",
+      "type": "string"
+    },
+    {
+      "name": "amount_minor",
+      "type": "long"
+    },
+    {
+      "name": "currency",
+      "type": "string"
+    },
+    {
+      "name": "risk_score",
+      "type": "int"
+    },
+    {
+      "name": "decision",
+      "type": "string"
+    },
+    {
+      "name": "matched_rules",
+      "type": {
+        "type": "array",
+        "items": "string"
+      }
+    },
+    {
+      "name": "reason_codes",
+      "type": {
+        "type": "array",
+        "items": "string"
+      }
+    },
+    {
+      "name": "rules_fingerprint",
+      "type": "string"
+    },
+    {
+      "name": "event_time",
+      "type": "long"
+    },
+    {
+      "name": "processed_at",
+      "type": "long"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "type": "record",
+  "name": "DeadLetter",
+  "namespace": "com.portfolio.paymentrisk.avro",
+  "fields": [
+    {
+      "name": "error_id",
+      "type": "string"
+    },
+    {
+      "name": "source_topic",
+      "type": "string"
+    },
+    {
+      "name": "source_partition",
+      "type": "int"
+    },
+    {
+      "name": "source_offset",
+      "type": "long"
+    },
+    {
+      "name": "observed_at",
+      "type": "long"
+    },
+    {
+      "name": "error_code",
+      "type": "string"
+    },
+    {
+      "name": "error_message",
+      "type": "string"
+    },
+    {
+      "name": "raw_payload",
+      "type": "string"
+    },
+    {
+      "name": "payload_truncated",
+      "type": "boolean"
+    },
+    {
+      "name": "source_timestamp",
+      "type": "long",
+      "default": -1
+    },
+    {
+      "name": "schema_id",
+      "type": "int",
+      "default": -1
+    }
+  ]
+}

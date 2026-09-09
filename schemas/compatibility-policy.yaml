@@ -1,0 +1,10 @@
+mode: BACKWARD_TRANSITIVE
+registry_mode: BACKWARD
+history_directory: schemas/history
+owner: payment-risk-platform
+classification: synthetic
+rules:
+  - every historical writer must be readable by the current reader in CI
+  - new optional fields need defaults
+  - breaking changes require a new major topic and parallel migration
+  - state JSON schema evolution additionally requires Flink restore tests

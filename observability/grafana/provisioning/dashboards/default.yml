@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: Payment Risk
+    orgId: 1
+    folder: Payment Risk
+    type: file
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

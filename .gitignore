@@ -1,0 +1,20 @@
+target/
+.env
+.idea/
+*.iml
+__pycache__/
+.venv/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+artifacts/
+*.Zone.Identifier
+*Zone.Identifier
+
+# Local dependencies, builds, and the private cross-project review
+node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+docs/marketplace-reuse.md

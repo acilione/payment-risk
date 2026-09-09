@@ -1,0 +1,53 @@
+{
+  "type": "record",
+  "name": "RiskRule",
+  "namespace": "com.portfolio.paymentrisk.avro",
+  "fields": [
+    {
+      "name": "rule_id",
+      "type": "string"
+    },
+    {
+      "name": "version",
+      "type": "long"
+    },
+    {
+      "name": "type",
+      "type": {
+        "type": "enum",
+        "name": "RuleType",
+        "symbols": [
+          "TX_COUNT_VELOCITY",
+          "AMOUNT_VELOCITY",
+          "UNIQUE_DEVICES",
+          "NEW_DEVICE_HIGH_AMOUNT",
+          "DECLINE_THEN_APPROVAL"
+        ]
+      }
+    },
+    {
+      "name": "enabled",
+      "type": "boolean"
+    },
+    {
+      "name": "score",
+      "type": "int"
+    },
+    {
+      "name": "window_seconds",
+      "type": "long"
+    },
+    {
+      "name": "threshold",
+      "type": "long"
+    },
+    {
+      "name": "currency",
+      "type": "string"
+    },
+    {
+      "name": "updated_at",
+      "type": "long"
+    }
+  ]
+}

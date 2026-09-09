@@ -1,0 +1,11 @@
+{
+  "rule_id": "R001",
+  "version": 2,
+  "type": "TX_COUNT_VELOCITY",
+  "enabled": true,
+  "score": 40,
+  "window_seconds": 120,
+  "threshold": 3,
+  "currency": "EUR",
+  "updated_at": 1788948000000
+}

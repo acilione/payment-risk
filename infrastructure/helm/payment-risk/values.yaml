@@ -1,0 +1,12 @@
+# Deployment-specific values are required; credentials belong in the existing Secret.
+image: ''
+serviceAccountAnnotations: {}
+bootstrapServers: ''
+schemaRegistryUrl: ''
+checkpointBucket: ''
+existingSecret: payment-risk-credentials
+transactionalPrefix: ''
+parallelism: 4
+replicas: 2
+allowedEgressCidrs: []
+initialSavepointPath: ''

@@ -1,0 +1,36 @@
+{{- if not .Values.allowedEgressCidrs }}{{ fail "allowedEgressCidrs must list Kafka, registry, object store and API endpoint CIDRs" }}{{ end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: {{ .Release.Name }}}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: payment-risk}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: payment-risk}}
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+      ports: [{port: 9249, protocol: TCP}]
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: flink-system}}
+      ports: [{port: 8081, protocol: TCP}]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: payment-risk}}
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    - to:
+      {{- range .Values.allowedEgressCidrs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+      {{- end }}
+      ports: [{port: 443, protocol: TCP}, {port: 9093, protocol: TCP}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: {{ .Release.Name }}-workers}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: {{ .Release.Name }}, component: taskmanager}

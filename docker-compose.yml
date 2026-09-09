@@ -1,0 +1,227 @@
+name: payment-risk
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-app-env: &app-env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SCHEMA_REGISTRY_URL: http://registry:8080/apis/ccompat/v7
+  TRANSACTIONAL_PREFIX: payment-risk-local-v1
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
+
+x-flink: &flink
+  logging: *logging
+  image: payment-risk:0.1.0
+  build:
+    context: .
+    dockerfile: infrastructure/docker/Dockerfile
+  environment:
+    <<: *app-env
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-payment_risk}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Run python3 scripts/init-env.py}
+    FLINK_PROPERTIES: |
+      jobmanager.rpc.address: jobmanager
+      parallelism.default: 2
+      taskmanager.numberOfTaskSlots: 2
+      jobmanager.memory.process.size: 1600m
+      taskmanager.memory.process.size: 2048m
+      state.backend.type: rocksdb
+      state.backend.incremental: true
+      execution.checkpointing.interval: 10s
+      execution.checkpointing.timeout: 2min
+      execution.checkpointing.min-pause: 2s
+      execution.checkpointing.max-concurrent-checkpoints: 1
+      execution.checkpointing.mode: EXACTLY_ONCE
+      execution.checkpointing.storage: filesystem
+      execution.checkpointing.dir: s3://payment-risk/checkpoints
+      execution.checkpointing.savepoint-dir: s3://payment-risk/savepoints
+      execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+      s3.endpoint: http://minio:9000
+      s3.path.style.access: true
+      restart-strategy.type: fixed-delay
+      restart-strategy.fixed-delay.attempts: 10
+      restart-strategy.fixed-delay.delay: 5s
+      metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+      metrics.reporter.prom.port: 9249
+  restart: unless-stopped
+  depends_on:
+    bootstrap:
+      condition: service_completed_successfully
+    minio-init:
+      condition: service_completed_successfully
+
+services:
+  website:
+    logging: *logging
+    image: payment-risk-website:0.1.0
+    build: {context: ./web}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 23002
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
+      FLINK_REST_URL: http://jobmanager:8081
+      PROMETHEUS_URL: http://prometheus:9090
+    ports: ['127.0.0.1:23001:23002']
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, node, -e, 'fetch("http://127.0.0.1:23002/api/health").then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+  kafka:
+    logging: *logging
+    image: apache/kafka:4.3.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_MAX_TIMEOUT_MS: 900000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    ports: ['127.0.0.1:29092:29092']
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test: [CMD-SHELL, '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null']
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  registry-db:
+    logging: *logging
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: registry
+      POSTGRES_USER: registry
+      POSTGRES_PASSWORD: ${REGISTRY_DB_PASSWORD:?Run python3 scripts/init-env.py}
+    volumes: [registry-data:/var/lib/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U registry -d registry']
+      interval: 5s
+      retries: 20
+  registry:
+    logging: *logging
+    image: apicurio/apicurio-registry:3.3.2
+    environment:
+      APICURIO_STORAGE_KIND: sql
+      APICURIO_STORAGE_SQL_KIND: postgresql
+      APICURIO_DATASOURCE_URL: jdbc:postgresql://registry-db:5432/registry
+      APICURIO_DATASOURCE_USERNAME: registry
+      APICURIO_DATASOURCE_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      APICURIO_RULES_GLOBAL_COMPATIBILITY: BACKWARD
+    depends_on:
+      registry-db: {condition: service_healthy}
+    ports: ['127.0.0.1:28081:8080']
+  minio:
+    logging: *logging
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-payment_risk}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes: [minio-data:/data]
+    ports: ['127.0.0.1:29000:9000','127.0.0.1:29001:9001']
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9000/minio/health/live]
+      interval: 5s
+      retries: 30
+  minio-init:
+    logging: *logging
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-payment_risk}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing local/payment-risk
+        mc version enable local/payment-risk
+  bootstrap:
+    logging: *logging
+    image: payment-risk:0.1.0
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile}
+    environment: *app-env
+    depends_on:
+      kafka: {condition: service_healthy}
+      registry: {condition: service_started}
+    entrypoint: [/bin/bash, -ec]
+    command:
+      - |
+        for attempt in {1..60}; do
+          if curl -fsS http://registry:8080/apis/ccompat/v7/subjects >/dev/null; then
+            exec java -cp /opt/flink/usrlib/risk-engine.jar com.portfolio.paymentrisk.tools.PlatformCli bootstrap
+          fi
+          sleep 2
+        done
+        exit 1
+  jobmanager:
+    <<: *flink
+    command: jobmanager
+    ports: ['127.0.0.1:28082:8081']
+  taskmanager:
+    <<: *flink
+    command: taskmanager
+  clickhouse:
+    logging: *logging
+    image: clickhouse/clickhouse-server:26.8.2.7
+    environment:
+      CLICKHOUSE_DB: risk
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes: [clickhouse-data:/var/lib/clickhouse, './infrastructure/docker/clickhouse.sql:/docker-entrypoint-initdb.d/001-risk.sql:ro']
+    ports: ['127.0.0.1:28123:8123']
+    healthcheck:
+      test: [CMD, wget, --spider, -q, http://localhost:8123/ping]
+      interval: 5s
+      retries: 30
+  materializer:
+    logging: *logging
+    image: payment-risk:0.1.0
+    environment: *app-env
+    entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.DecisionMaterializer]
+    restart: unless-stopped
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+      clickhouse: {condition: service_healthy}
+  prometheus:
+    logging: *logging
+    image: prom/prometheus:v3.14.0
+    volumes: ['./observability/prometheus:/etc/prometheus:ro',prometheus-data:/prometheus]
+    ports: ['127.0.0.1:29090:9090']
+  grafana:
+    logging: *logging
+    image: grafana/grafana:13.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Run python3 scripts/init-env.py}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes: ['./observability/grafana/provisioning:/etc/grafana/provisioning:ro','./dashboards:/var/lib/grafana/dashboards:ro',grafana-data:/var/lib/grafana]
+    ports: ['127.0.0.1:23000:3000']
+
+volumes:
+  kafka-data:
+  registry-data:
+  minio-data:
+  clickhouse-data:
+  prometheus-data:
+  grafana-data:

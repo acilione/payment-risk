@@ -1,0 +1,57 @@
+name: website
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'scripts/verify-website.py', '.github/workflows/website.yml']
+  pull_request:
+    paths: ['web/**', 'scripts/verify-website.py', '.github/workflows/website.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.20.0'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm --prefix web ci
+      - run: npm --prefix web run format:check
+      - run: npm --prefix web test
+      - run: npm --prefix web audit --audit-level=high
+      - run: npm --prefix web run build
+        env:
+          VITE_DEMO_MODE: 'true'
+          BASE_PATH: /payment-risk/
+      - run: pip install playwright==1.62.0 && python -m playwright install --with-deps chromium
+      - name: Browser acceptance
+        run: |
+          mkdir -p artifacts/site/payment-risk
+          cp -r web/dist/. artifacts/site/payment-risk/
+          python3 -m http.server 23001 --bind 127.0.0.1 --directory artifacts/site > artifacts/website-server.log 2>&1 &
+          python3 scripts/verify-website.py --url http://127.0.0.1:23001/payment-risk/ --static
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with: {name: website-browser-evidence, path: artifacts/website/}
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        if: github.event_name != 'pull_request'
+        with: {path: web/dist}
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        id: deployment

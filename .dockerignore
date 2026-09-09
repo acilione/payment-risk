@@ -1,0 +1,6 @@
+target/*
+!target/risk-engine.jar
+.git
+.env
+artifacts
+**/__pycache__

@@ -1,0 +1,15 @@
+rule_files: [alerts.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="flink",instance="taskmanager:9249"}'
+        values: '0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FlinkMetricsUnavailable
+        exp_alerts:
+          - exp_labels: {job: flink, instance: 'taskmanager:9249', severity: critical}
+            exp_annotations:
+              summary: Flink metrics endpoint is unavailable
+              runbook: docs/operations-runbook.md

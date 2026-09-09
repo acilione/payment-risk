@@ -1,0 +1,4 @@
+security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-512
+# Populate sasl.jaas.config through your Secret manager. Never commit credentials.
+ssl.endpoint.identification.algorithm=https

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  annotations: {{ .Values.serviceAccountAnnotations | toJson }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ .Release.Name }}}
+rules:
+  - apiGroups: ['']
+    resources: [pods, configmaps, services]
+    verbs: [get, list, watch, create, delete, update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ .Release.Name }}}
+subjects:
+  - {kind: ServiceAccount, name: {{ .Release.Name }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ .Release.Name }}}

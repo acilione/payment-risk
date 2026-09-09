@@ -1,0 +1,6 @@
+apiVersion: v2
+name: payment-risk
+description: Stateful Flink payment risk application for Flink Kubernetes Operator 1.15.0
+type: application
+version: 0.1.0
+appVersion: 0.1.0
