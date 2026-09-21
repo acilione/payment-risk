@@ -12,4 +12,4 @@ tests:
           - exp_labels: {job: flink, instance: 'taskmanager:9249', severity: critical}
             exp_annotations:
               summary: Flink metrics endpoint is unavailable
-              runbook: docs/operations-runbook.md
+              runbook: docs/technical-guide.md#operations

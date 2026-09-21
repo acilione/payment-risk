@@ -26,12 +26,10 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   Wallet,
   Workflow,
   X,
-  Zap,
 } from "lucide-react";
 import type { Decision, Overview, WindowKey } from "./types";
 import { demoOverview, ruleCatalog } from "./demo";
@@ -39,6 +37,7 @@ import "./style.css";
 
 const staticDemo = import.meta.env.VITE_DEMO_MODE === "true";
 const github = "https://github.com/acilione/payment-risk";
+const technicalGuide = `${github}/blob/main/docs/technical-guide.md`;
 const number = (n: number) => new Intl.NumberFormat("en-GB").format(n);
 const money = (n: number) =>
   new Intl.NumberFormat("en-IE", {
@@ -131,7 +130,7 @@ function App() {
       } catch (e) {
         if (active && !(e instanceof DOMException && e.name === "AbortError"))
           setError(
-            "Live analytics are unavailable. Start the local stack, or explore the illustrative demo.",
+            "Live data is unavailable. Start the local services or switch to demo data.",
           );
       } finally {
         if (active) setLoading(false);
@@ -195,26 +194,14 @@ function App() {
             e.preventDefault();
             nav("Overview");
           }}
-          aria-label="Pulse home"
+          aria-label="Payment risk home"
         >
           <span className="brand-mark">
             <Activity size={25} />
           </span>
-          <span>
-            pulse<span className="brand-dot">.</span>
-          </span>
-          <span className="brand-tag">RISK</span>
+          <span>Payment risk</span>
         </a>
-        <div className="workspace">
-          <span className="workspace-icon">
-            <Layers3 size={18} />
-          </span>
-          <div>
-            Payment observatory<small>Engineering workspace</small>
-          </div>
-          <ChevronDown size={14} />
-        </div>
-        <div className="nav-label">WORKSPACE</div>
+        <div className="nav-label">DASHBOARD</div>
         <nav aria-label="Main navigation">
           {[
             [LayoutDashboard, "Overview"],
@@ -240,7 +227,7 @@ function App() {
         <div className="nav-label nav-resources">RESOURCES</div>
         <a
           className="nav-item"
-          href={`${github}#readme`}
+          href={technicalGuide}
           target="_blank"
           rel="noreferrer"
         >
@@ -254,23 +241,6 @@ function App() {
           <ArrowUpRight size={14} className="nav-out" />
         </a>
         <div className="sidebar-bottom">
-          <div className="engine-card">
-            <span className="tiny-label">
-              <Zap size={13} /> BUILT FOR THE STREAM
-            </span>
-            <strong>
-              Every payment.
-              <br />A clearer decision.
-            </strong>
-            <p>
-              Stateful risk intelligence,
-              <br />
-              powered by Apache Flink.
-            </p>
-            <span className="engine-footer">
-              Flink 2.2.1 <span>↗</span>
-            </span>
-          </div>
           <button className="profile" onClick={() => setHelp(true)}>
             <span className="avatar">AC</span>
             <span>
@@ -292,7 +262,7 @@ function App() {
             >
               <Menu size={20} />
             </button>
-            <span>Workspace</span>
+            <span>Dashboard</span>
             <ChevronRight size={13} />
             <strong>{tab}</strong>
           </div>
@@ -300,12 +270,12 @@ function App() {
             <span className={`connection ${error ? "offline" : ""}`}>
               <i />
               {demo
-                ? "Demo workspace"
+                ? "Demo data"
                 : error
                   ? "Connection unavailable"
                   : loading && !data
                     ? "Connecting"
-                    : "Live workspace"}
+                    : "Live data"}
             </span>
             <span className="topbar-divider" />
             <button
@@ -321,24 +291,15 @@ function App() {
         <main>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PAYMENT RISK OBSERVATORY</div>
-              <h1>
-                {tab === "Overview"
-                  ? "A pulse on every payment."
-                  : tab === "Transactions"
-                    ? "Follow the decision."
-                    : tab === "Risk rules"
-                      ? "Risk, with a reason."
-                      : "Built to keep its state."}
-              </h1>
+              <h1>{tab}</h1>
               <p>
                 {tab === "Overview"
-                  ? "From a stream of transactions to decisions you can explain."
+                  ? "Payment totals, risk decisions, and service status."
                   : tab === "Transactions"
-                    ? "Explore the latest decisions and the evidence behind every score."
+                    ? "Search payment decisions and review their scores and matched rules."
                     : tab === "Risk rules"
-                      ? "Five transparent signals. One explainable decision."
-                      : "An event-time pipeline with a clear durability boundary."}
+                      ? "Default rules, score weights, and decision thresholds."
+                      : "How payments are processed, stored, and recovered after a restart."}
               </p>
             </div>
             <div className="heading-actions">
@@ -355,12 +316,12 @@ function App() {
                     : changeMode
                 }
               >
-                <Sparkles size={15} />
+                <Database size={15} />
                 {staticDemo
                   ? "Open local dashboard"
                   : demo
-                    ? "Connect live"
-                    : "Explore demo"}
+                    ? "Use live data"
+                    : "View demo"}
               </button>
               <a
                 className="button dark"
@@ -369,7 +330,7 @@ function App() {
                 rel="noreferrer"
               >
                 <GitFork size={15} />
-                View project
+                View source
                 <ArrowUpRight size={14} />
               </a>
             </div>
@@ -377,11 +338,10 @@ function App() {
           {demo && (
             <div className="demo-banner">
               <span>
-                <Sparkles size={15} />
-                <strong>Illustrative demo</strong>
+                <Database size={15} />
+                <strong>Demo data</strong>
                 <span>
-                  Sample transactions and telemetry — not measurements from a
-                  running pipeline.
+                  Transactions, charts, and service status use sample data.
                 </span>
               </span>
               <button
@@ -405,12 +365,10 @@ function App() {
             <div role="alert" className="error-banner">
               <Radio size={18} />
               <div>
-                <strong>Live connection interrupted</strong>
+                <strong>Live data unavailable</strong>
                 <p>
                   {error}
-                  {data
-                    ? " The last successful snapshot remains visible below."
-                    : ""}
+                  {data ? " The last received data is shown below." : ""}
                 </p>
               </div>
               <button
@@ -426,7 +384,7 @@ function App() {
               <div className="section-toolbar">
                 <div className="section-title">
                   <span className="live-dot" />{" "}
-                  {tab === "Overview" ? "Risk overview" : "Decision activity"}
+                  {tab === "Overview" ? "Risk overview" : "Payment decisions"}
                   <span className="subtle">/ EUR payments</span>
                 </div>
                 <div className="time-controls">
@@ -469,7 +427,7 @@ function App() {
                 <Stat
                   title="Transactions evaluated"
                   value={totals ? number(total) : "—"}
-                  detail="Unique business transactions"
+                  detail="Unique transactions"
                   icon={<Activity size={18} />}
                   chart="coral"
                 />
@@ -488,7 +446,7 @@ function App() {
                   chart="green"
                 />
                 <Stat
-                  title="Flagged for attention"
+                  title="Review or rejected"
                   value={totals ? number(flagged) : "—"}
                   detail={`${number(totals?.review || 0)} review · ${number(totals?.rejected || 0)} rejected`}
                   icon={<Filter size={18} />}
@@ -503,8 +461,8 @@ function App() {
                 <section className="card trend-card">
                   <div className="card-heading">
                     <div>
-                      <h2>Decision flow</h2>
-                      <p>How payments move through the risk engine</p>
+                      <h2>Decisions over time</h2>
+                      <p>Payment counts by decision and time interval</p>
                     </div>
                     <span className="chip">
                       {window === "1h"
@@ -543,7 +501,7 @@ function App() {
                   <div className="card-heading">
                     <div>
                       <h2>Decision breakdown</h2>
-                      <p>Clear outcomes, at a glance</p>
+                      <p>Share of approved, review, and rejected payments</p>
                     </div>
                     <ShieldCheck size={18} className="muted" />
                   </div>
@@ -631,10 +589,10 @@ function App() {
                     <Workflow size={20} />
                   </span>
                   <div>
-                    <strong>Pipeline health</strong>
+                    <strong>Service status</strong>
                     <small>
                       {demo
-                        ? "Illustrative service states"
+                        ? "Sample service status"
                         : healthy
                           ? "All monitored services available"
                           : "Check service availability"}
@@ -652,7 +610,7 @@ function App() {
                       {i < 3 && <span className="service-link">···</span>}
                     </div>
                   )) || (
-                    <span className="muted">Waiting for service telemetry</span>
+                    <span className="muted">Waiting for service status</span>
                   )}
                 </div>
                 <button
@@ -673,7 +631,9 @@ function App() {
                       Recent decisions{" "}
                       <span className="heading-count">{decisions.length}</span>
                     </h2>
-                    <p>Click a transaction to explore its risk signals</p>
+                    <p>
+                      Select a transaction to view its score and matched rules
+                    </p>
                   </div>
                   {tab === "Overview" && (
                     <button
@@ -801,12 +761,12 @@ function App() {
                       <strong>
                         {data
                           ? "No matching decisions"
-                          : "Connect your pipeline"}
+                          : "Waiting for payment data"}
                       </strong>
                       <p>
                         {data
                           ? "Try a wider time window or another search."
-                          : "Live decisions will appear here. You can also explore the demo."}
+                          : "Start the local services or select View demo to load sample data."}
                       </p>
                     </div>
                   )}
@@ -815,8 +775,8 @@ function App() {
                   <span>
                     <CheckCheck size={13} />{" "}
                     {demo
-                      ? "Illustrative synthetic transactions"
-                      : "Kafka-derived · replay-safe business view"}
+                      ? "Sample transactions"
+                      : "One decision per transaction"}
                   </span>
                   <span>
                     Latest{" "}
@@ -829,11 +789,11 @@ function App() {
                 <section className="card rules-card">
                   <div className="card-heading">
                     <div>
-                      <h2>Risk signals</h2>
+                      <h2>Rule matches</h2>
                       <p>Matched rules in this window</p>
                     </div>
                     <span className="tiny-icon">
-                      <Zap size={16} />
+                      <ShieldCheck size={16} />
                     </span>
                   </div>
                   <div className="rule-list">
@@ -867,9 +827,7 @@ function App() {
                   <div className="rules-note">
                     <ShieldCheck size={16} />
                     <span>
-                      Every score includes the signals
-                      <br />
-                      and policy fingerprint behind it.
+                      Select a transaction to see the rules used in its score.
                     </span>
                   </div>
                 </section>
@@ -881,11 +839,11 @@ function App() {
               <div className="policy-note">
                 <ShieldCheck size={22} />
                 <div>
-                  <strong>Baseline policy catalog</strong>
+                  <strong>Default risk rules</strong>
                   <p>
-                    These are the packaged defaults. Live updates are versioned
-                    through Kafka; each decision records the exact policy
-                    fingerprint it used.
+                    These are the default rule settings. Live updates arrive
+                    through Kafka. Each decision includes a fingerprint of the
+                    settings used to calculate its score.
                   </p>
                 </div>
               </div>
@@ -909,10 +867,11 @@ function App() {
                 ))}
               </div>
               <section className="card score-guide">
-                <h2>From signals to a decision</h2>
+                <h2>Decision thresholds</h2>
                 <p>
-                  Matched weights are summed and capped at 100. Classification
-                  thresholds are deployment-controlled.
+                  The score is the sum of matched rule weights, capped at 100.
+                  These are the default thresholds; they can be changed in the
+                  deployment settings.
                 </p>
                 <div>
                   <span className="approve">
@@ -930,14 +889,10 @@ function App() {
           )}
           {tab === "Architecture" && <Architecture data={data} demo={demo} />}
           <footer className="page-footer">
+            <span>Payment risk</span>
             <span>
-              <span className="footer-pulse">⌁</span> Pulse / Payment risk
-              observatory
-            </span>
-            <span>
-              Synthetic payments. Real streaming engineering.
               <a href={github} target="_blank" rel="noreferrer">
-                Explore the code <ArrowUpRight size={12} />
+                Source code <ArrowUpRight size={12} />
               </a>
             </span>
           </footer>
@@ -955,7 +910,7 @@ function App() {
         {selected && (
           <div className="inspector-body">
             <div className="inspector-top">
-              <span className="eyebrow">DECISION INSPECTOR</span>
+              <span className="eyebrow">PAYMENT DETAILS</span>
               <button
                 className="icon-button"
                 onClick={() => setSelected(null)}
@@ -964,7 +919,7 @@ function App() {
                 <X size={20} />
               </button>
             </div>
-            <h2 id="inspector-title">A decision, explained.</h2>
+            <h2 id="inspector-title">Decision details</h2>
             <p className="inspector-id">{selected.transaction_id}</p>
             <div className="inspector-score">
               <div>
@@ -988,7 +943,7 @@ function App() {
               <dt>Finalized at</dt>
               <dd>{new Date(selected.processed_at).toLocaleString()}</dd>
             </dl>
-            <h3>Matched signals</h3>
+            <h3>Matched rules</h3>
             {selected.matched_rules.length ? (
               selected.matched_rules.map((id) => (
                 <div className="matched-rule" key={id}>
@@ -1017,12 +972,11 @@ function App() {
                 <code>{selected.reason_codes.join(" · ")}</code>
               </>
             )}
-            <h3>Policy fingerprint</h3>
+            <h3>Rules fingerprint</h3>
             <code className="fingerprint">{selected.rules_fingerprint}</code>
             <p className="inspector-note">
-              This identifies the policy snapshot admitted for this event. The
-              score reflects that snapshot, not necessarily the current
-              defaults.
+              This fingerprint identifies the rule settings used for this
+              payment. They may differ from the current settings.
             </p>
             <div className="source-position">
               <Database size={15} />
@@ -1035,7 +989,7 @@ function App() {
       <dialog
         ref={helpDialog}
         className="help-dialog"
-        aria-label="About Pulse"
+        aria-label="About Payment risk"
         onCancel={() => setHelp(false)}
         onClick={(e) => {
           if (e.target === e.currentTarget) setHelp(false);
@@ -1052,25 +1006,24 @@ function App() {
           <span className="brand-mark">
             <Activity size={28} />
           </span>
-          <h2>Meet Pulse.</h2>
+          <h2>About Payment risk</h2>
           <p>
-            A showcase for a real Apache Flink payment risk pipeline. Explore
-            explainable decisions, inspect five stateful risk signals, and
-            follow recovery through durable checkpoints.
+            This dashboard shows payment decisions from an Apache Flink job. Use
+            it to review transaction scores, matched rules, and service status.
           </p>
           <p>
-            <strong>Live mode</strong> reads your local pipeline.{" "}
-            <strong>Demo mode</strong> uses clearly labeled illustrative data
-            and runs without infrastructure.
+            <strong>Live mode</strong> reads data from your local services.{" "}
+            <strong>Demo mode</strong> uses sample data and does not require
+            those services.
           </p>
           <a
             className="button dark"
-            href={github}
+            href={technicalGuide}
             target="_blank"
             rel="noreferrer"
           >
-            <GitFork size={16} />
-            Explore the project
+            <Code2 size={16} />
+            Read documentation
             <ExternalLink size={14} />
           </a>
         </section>
@@ -1248,20 +1201,32 @@ function Architecture({
       <section className="architecture-hero card">
         <div className="card-heading">
           <div>
-            <h2>From event to evidence</h2>
+            <h2>Payment processing</h2>
             <p>
-              The Kafka decision log is the authoritative output. Analytics is a
-              replay-safe materialization.
+              Flink reads payments from Kafka and writes risk decisions back to
+              Kafka. ClickHouse stores those decisions for dashboard queries.
             </p>
           </div>
-          <span className="chip">Apache Flink DataStream</span>
+          <a
+            className="text-button"
+            href={`${technicalGuide}#data-model`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Data model <ArrowUpRight size={14} />
+          </a>
         </div>
         <div className="architecture-flow">
           {[
-            [Radio, "01", "Kafka", "Durable payment events"],
-            [Layers3, "02", "Apache Flink", "Order · deduplicate · evaluate"],
+            [Radio, "01", "Kafka", "Incoming payments"],
+            [
+              Layers3,
+              "02",
+              "Apache Flink",
+              "Payment ordering and risk scoring",
+            ],
             [ShieldCheck, "03", "Decision log", "Transactional Kafka output"],
-            [Database, "04", "ClickHouse", "Replay-safe analytics"],
+            [Database, "04", "ClickHouse", "Dashboard queries"],
           ].map(([Icon, n, name, detail], i) => {
             const I = Icon as typeof Radio;
             return (
@@ -1278,9 +1243,9 @@ function Architecture({
         <div className="architecture-state">
           <GitBranch size={19} />
           <span>
-            <strong>Durable state, outside the process.</strong> RocksDB state
-            is checkpointed to S3 / MinIO. Stable operator IDs and savepoints
-            support compatible upgrades.
+            <strong>State storage.</strong> Flink stores working state in
+            RocksDB and checkpoints it to S3 or MinIO. Savepoints and stable
+            operator IDs support upgrades that preserve compatible state.
           </span>
         </div>
       </section>
@@ -1288,23 +1253,23 @@ function Architecture({
         {[
           [
             Clock3,
-            "Business time comes first",
-            "Events wait for a ten-second watermark allowance and are evaluated in event-time order. Late arrivals are routed separately. An idle stream keeps its pending tail.",
+            "Event ordering",
+            "Payments are ordered by event time with a 10-second allowance for out-of-order arrivals. Late payments are sent to a separate output. Pending payments remain buffered when the stream is idle.",
           ],
           [
             CheckCheck,
-            "Exactly once, with a boundary",
-            "Flink checkpoints coordinate state and Kafka transactions. Consumers read committed output. Business event IDs are independently deduplicated for 24 hours.",
+            "Delivery and duplicates",
+            "Flink checkpoints coordinate state with Kafka transactions. Consumers read committed decisions. Repeated event IDs are filtered for 24 hours.",
           ],
           [
             SlidersHorizontal,
-            "Change rules while running",
-            "Typed rule updates are broadcast to every risk subtask. Increasing versions reject stale updates; each admitted event retains its policy snapshot.",
+            "Rule updates",
+            "Kafka distributes rule updates to all risk workers. Older rule versions are rejected. Each payment keeps the rule settings recorded when it entered processing.",
           ],
           [
             Gauge,
-            "Measure the whole journey",
-            "Finalization and committed-output latency include watermark and checkpoint waits. The rule-evaluation histogram measures only the engine calculation.",
+            "Processing latency",
+            "Time to finalize a decision includes waiting for event ordering. Time to publish it also includes waiting for a checkpoint. Rule evaluation time is measured separately.",
           ],
         ].map(([Icon, title, text]) => {
           const I = Icon as typeof Clock3;
@@ -1323,27 +1288,27 @@ function Architecture({
       <section className="card recovery-card">
         <div>
           <span className="eyebrow">
-            {demo ? "ILLUSTRATIVE TELEMETRY" : "LATEST CHECKPOINT"}
+            {demo ? "SAMPLE CHECKPOINT" : "LATEST CHECKPOINT"}
           </span>
           <h2>
             {data?.checkpoint
               ? `Checkpoint #${data.checkpoint.id}`
-              : "Awaiting checkpoint telemetry"}
+              : "Waiting for checkpoint data"}
           </h2>
           <p>
             {data?.checkpoint
               ? `${data.checkpoint.duration} ms duration · ${number(data.checkpoint.bytes)} state bytes`
-              : "Start a local Flink job to see recovery telemetry."}
+              : "Start a local Flink job to see checkpoint details."}
           </p>
         </div>
         <a
           className="button dark"
-          href={`${github}/blob/main/docs/operations-runbook.md`}
+          href={`${technicalGuide}#operations`}
           target="_blank"
           rel="noreferrer"
         >
           <Terminal size={16} />
-          Recovery runbook
+          Operations guide
           <ArrowUpRight size={15} />
         </a>
       </section>

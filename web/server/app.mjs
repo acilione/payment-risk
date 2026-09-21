@@ -64,7 +64,7 @@ export async function buildApp({ reader, logger = false } = {}) {
         cache.delete(window);
         return reply.code(503).send({
           error:
-            "Live analytics are unavailable. Check the local pipeline or switch to the illustrative demo.",
+            "Live data is unavailable. Check the local services or switch to demo data.",
         });
       }
     },

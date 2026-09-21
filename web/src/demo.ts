@@ -3,32 +3,36 @@ import type { DecisionKind, Overview, WindowKey } from "./types";
 export const ruleCatalog = [
   {
     id: "R001",
-    name: "Payment velocity",
-    description: "More than 5 payments within 2 minutes.",
+    name: "Payment frequency",
+    description: "More than 5 payments by the same customer within 2 minutes.",
     score: 25,
   },
   {
     id: "R002",
-    name: "Amount velocity",
-    description: "More than €3,000 within 10 minutes.",
+    name: "Total payment amount",
+    description:
+      "More than €3,000 in payments by the same customer within 10 minutes.",
     score: 35,
   },
   {
     id: "R003",
-    name: "Device diversity",
-    description: "At least 3 devices within 15 minutes.",
+    name: "Multiple devices",
+    description:
+      "Payments from at least 3 devices for the same customer within 15 minutes.",
     score: 20,
   },
   {
     id: "R004",
-    name: "Unseen device",
-    description: "A device unseen for 30 days with a payment of at least €800.",
+    name: "New device",
+    description:
+      "A payment of at least €800 from a device not seen for that customer in the previous 30 days.",
     score: 30,
   },
   {
     id: "R005",
-    name: "Decline → approval",
-    description: "An approval after at least 4 declines within 10 minutes.",
+    name: "Approval after declines",
+    description:
+      "An approved payment after at least 4 declines for the same customer within 10 minutes.",
     score: 40,
   },
 ];
@@ -73,7 +77,7 @@ export function demoOverview(window: WindowKey): Overview {
       decision: kind,
       matched_rules,
       reason_codes: matched_rules.map((id) => `${id}_MATCH`),
-      rules_fingerprint: "demo-illustrative-policy-7d29c3a1",
+      rules_fingerprint: "demo-policy-7d29c3a1",
       event_time: now - (i * span) / 60 - 14000,
       processed_at: now - (i * span) / 60,
       source_partition: i % 3,
@@ -104,22 +108,22 @@ export function demoOverview(window: WindowKey): Overview {
       {
         name: "Kafka",
         status: "healthy",
-        detail: "Illustrative source telemetry",
+        detail: "Sample Kafka status",
       },
       {
         name: "Apache Flink",
         status: "healthy",
-        detail: "Illustrative processing state",
+        detail: "Sample Flink status",
       },
       {
         name: "ClickHouse",
         status: "healthy",
-        detail: "Illustrative analytical storage",
+        detail: "Sample ClickHouse status",
       },
       {
         name: "Checkpoints",
         status: "healthy",
-        detail: "Illustrative checkpoint telemetry",
+        detail: "Sample checkpoint status",
       },
     ],
     checkpoint: {
@@ -128,6 +132,6 @@ export function demoOverview(window: WindowKey): Overview {
       bytes: 324865,
       completedAt: now - 8000,
     },
-    job: { id: "illustrative-demo-job", state: "RUNNING" },
+    job: { id: "demo-job", state: "RUNNING" },
   };
 }

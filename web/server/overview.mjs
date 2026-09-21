@@ -128,20 +128,20 @@ export function createReader(
           status: lag === undefined ? "unavailable" : "healthy",
           detail:
             lag === undefined
-              ? "Lag telemetry unavailable"
-              : `${lag} records behind · Flink source telemetry`,
+              ? "Kafka lag unavailable"
+              : `${lag} records behind, reported by Flink`,
         },
         {
           name: "Apache Flink",
           status: job ? "healthy" : "unavailable",
           detail: job
-            ? "Stateful processing · job running"
+            ? "Payment processing job running"
             : "No running payment-risk job detected",
         },
         {
           name: "ClickHouse",
           status: "healthy",
-          detail: "Replay-safe decision materialization",
+          detail: "Stored payment decisions",
         },
         {
           name: "Checkpoints",
@@ -151,7 +151,7 @@ export function createReader(
               : "unavailable",
           detail: checkpoint
             ? `#${checkpoint.id} · ${checkpoint.duration} ms to complete`
-            : "Checkpoint telemetry unavailable",
+            : "Checkpoint data unavailable",
         },
       ],
     };

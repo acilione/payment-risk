@@ -100,10 +100,11 @@ small {
   align-items: center;
   gap: 9px;
   color: #f5f7f2;
-  font-size: 33px;
+  font-size: 20px;
   font-weight: 650;
-  letter-spacing: -1.7px;
+  letter-spacing: -0.6px;
   padding-left: 7px;
+  margin-bottom: 36px;
 }
 .brand-mark {
   background: #e9987e;
@@ -113,49 +114,6 @@ small {
   width: 35px;
   height: 35px;
   border-radius: 11px;
-}
-.brand-dot {
-  color: #e9987e;
-}
-.brand-tag {
-  font-size: 8px;
-  color: #a7b2a8;
-  letter-spacing: 1.8px;
-  border: 1px solid #455148;
-  border-radius: 4px;
-  padding: 4px 5px;
-  margin: 6px 0 0 3px;
-}
-.workspace {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid #3c463e;
-  border-radius: 8px;
-  padding: 13px 10px;
-  margin: 35px 0 29px;
-  color: #e3e8e1;
-  font-size: 11px;
-  font-weight: 500;
-}
-.workspace small {
-  display: block;
-  font-size: 9px;
-  color: #89978c;
-  margin-top: 5px;
-}
-.workspace > svg {
-  margin-left: auto;
-  color: #8a978d;
-}
-.workspace-icon {
-  width: 29px;
-  height: 31px;
-  border-radius: 6px;
-  background: #323e34;
-  display: grid;
-  place-items: center;
-  color: #b1c0b0;
 }
 .nav-label {
   font-size: 9px;
@@ -210,48 +168,6 @@ small {
 .sidebar-bottom {
   margin-top: auto;
   padding-top: 38px;
-}
-.engine-card {
-  border: 1px solid #465044;
-  border-radius: 9px;
-  padding: 17px 15px;
-  background: radial-gradient(
-    ellipse at bottom right,
-    #45583a65,
-    transparent 80%
-  );
-}
-.tiny-label {
-  font-size: 8px;
-  letter-spacing: 1px;
-  font-weight: 500;
-  color: #b9c9a8;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.engine-card strong {
-  display: block;
-  font-size: 18px;
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: -0.4px;
-  color: #eaf0e3;
-  margin-top: 15px;
-}
-.engine-card p {
-  font-size: 10px;
-  color: #96a68f;
-  margin-top: 8px;
-}
-.engine-footer {
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid #465141;
-  margin-top: 17px;
-  padding-top: 12px;
-  font-size: 10px;
-  color: #b4c2a9;
 }
 .profile {
   display: flex;
@@ -1158,11 +1074,7 @@ tbody tr:hover {
   align-items: center;
   gap: 8px;
 }
-.footer-pulse {
-  font-size: 25px;
-  color: #9daa8c;
-  line-height: 1;
-}
+
 .page-footer a {
   display: inline-flex;
   align-items: center;
@@ -2405,9 +2317,6 @@ th {
   }
   .stat-bottom {
     gap: 4px;
-  }
-  .brand {
-    font-size: 31px;
   }
 }
 
