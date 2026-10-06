@@ -37,7 +37,7 @@ import "./style.css";
 
 const staticDemo = import.meta.env.VITE_DEMO_MODE === "true";
 const github = "https://github.com/acilione/payment-risk";
-const technicalGuide = `${github}/blob/main/docs/technical-guide.md`;
+const documentation = `${github}/blob/main/README.md`;
 const number = (n: number) => new Intl.NumberFormat("en-GB").format(n);
 const money = (n: number) =>
   new Intl.NumberFormat("en-IE", {
@@ -227,7 +227,7 @@ function App() {
         <div className="nav-label nav-resources">RESOURCES</div>
         <a
           className="nav-item"
-          href={technicalGuide}
+          href={documentation}
           target="_blank"
           rel="noreferrer"
         >
@@ -1018,7 +1018,7 @@ function App() {
           </p>
           <a
             className="button dark"
-            href={technicalGuide}
+            href={documentation}
             target="_blank"
             rel="noreferrer"
           >
@@ -1209,7 +1209,7 @@ function Architecture({
           </div>
           <a
             className="text-button"
-            href={`${technicalGuide}#data-model`}
+            href={`${documentation}#data-model`}
             target="_blank"
             rel="noreferrer"
           >
@@ -1303,7 +1303,7 @@ function Architecture({
         </div>
         <a
           className="button dark"
-          href={`${technicalGuide}#operations`}
+          href={`${documentation}#operations`}
           target="_blank"
           rel="noreferrer"
         >
