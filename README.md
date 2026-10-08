@@ -25,7 +25,7 @@ The included producer generates synthetic EUR payments. The application calculat
 | Apache Flink 2.2.1, DataStream API | Connects the payment and rule streams, partitions customer state, evaluates event-time timers, and coordinates checkpoints with Kafka transactions. |
 | Apache Kafka 4.3.1 and Flink Kafka connector 5.0.0-2.2 | Stores input payments, rule updates, decisions, invalid records, and late payments in separate topics. |
 | Avro 1.12.1 and Apicurio Registry 3.3.2 | Define and validate the wire format. Schema IDs let consumers resolve the writer schema against the application's reader schema. PostgreSQL stores registry metadata. |
-| Jackson 2.21.4 | Represents decoded records, serializes the pending/history state, and constructs the canonical rule payload used for fingerprints. |
+| Jackson 2.21.7 | Represents decoded records, serializes the pending/history state, and constructs the canonical rule payload used for fingerprints. |
 | Embedded RocksDB | Stores Flink's keyed event, customer-history, and device state. Incremental checkpoints copy state to object storage. |
 | MinIO / Amazon S3 | Hold checkpoints and savepoints. Compose uses MinIO through Flink's S3 filesystem plugin; the Kubernetes configuration uses an S3 bucket. |
 | ClickHouse 26.8.2.7 | Stores decisions in `ReplacingMergeTree` and provides aggregates and transaction queries through a `FINAL` view. |
@@ -36,6 +36,8 @@ The included producer generates synthetic EUR payments. The application calculat
 | Maven, JUnit, Playwright, GitHub Actions | Package the Java application, test rules and managed state, check browser behavior, and run build, integration, and image checks. |
 
 Exact dependency and image versions are declared in [pom.xml](pom.xml), [web/package.json](web/package.json), [web/package-lock.json](web/package-lock.json), [docker-compose.yml](docker-compose.yml), and the Dockerfiles. The web runtime version is also recorded in [web/.nvmrc](web/.nvmrc).
+
+Compose builds the MinIO server and client from pinned upstream source commits using [minio.Dockerfile](infrastructure/docker/minio.Dockerfile), because the community images are no longer available. The server uses release `RELEASE.2025-10-15T17-29-55Z`; the client uses `RELEASE.2025-08-13T08-35-41Z`. Each image includes the upstream license. These containers provide S3 storage for local development and integration tests; the Kubernetes deployment uses Amazon S3.
 
 ## Processing flow
 
