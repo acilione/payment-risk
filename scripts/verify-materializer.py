@@ -56,6 +56,28 @@ physical = rows('SELECT count() AS n FROM risk.evaluations')[0]
 dry = replay(False)
 assert rows('SELECT count() AS n FROM risk.evaluations')[0] == physical
 
+# When customer simulation was run, reconcile its complete timelines with the dashboard's view.
+simulation_path = ROOT / 'artifacts/customer-simulation.json'
+simulation_check = None
+if simulation_path.exists():
+    simulation = json.loads(simulation_path.read_text())
+    expected = {entry['decision']['event_id']: entry['decision']
+                for case in simulation['cases'] for entry in case['timeline']}
+    run_id = simulation['run_id']
+    if not run_id.startswith('sim-') or any(c not in 'sim-0123456789abcdef' for c in run_id):
+        raise ValueError('Unexpected simulation run ID')
+    stored = rows("SELECT event_id, evaluation_id, transaction_id, risk_score, decision, matched_rules, amount_minor "
+                  "FROM risk.decisions_current WHERE startsWith(customer_id, '" + run_id + "-')")
+    actual = {row['event_id']: row for row in stored if '-marker-' not in row['event_id']}
+    assert len(actual) == len(stored) - sum('-marker-' in row['event_id'] for row in stored)
+    assert actual.keys() == expected.keys(), 'Customer simulation coverage differs in ClickHouse'
+    for event_id, row in actual.items():
+        for field in ('evaluation_id', 'transaction_id', 'risk_score', 'decision', 'matched_rules'):
+            assert row[field] == expected[event_id][field], (event_id, field)
+        assert int(row['amount_minor']) == expected[event_id]['amount_minor'], event_id
+    simulation_check = {'run_id': run_id, 'unique_payments': len(actual),
+                        'amount_minor': sum(int(row['amount_minor']) for row in actual.values())}
+
 name = 'risk_verify_' + uuid.uuid4().hex
 assert name.startswith('risk_verify_') and name.isidentifier()
 try:
@@ -87,6 +109,7 @@ finally:
     sql('DROP DATABASE IF EXISTS ' + name)
 
 report = {'result': 'PASS', 'baseline': baseline, 'first_replay': first, 'second_replay': second, 'dry_run': dry,
+          'customer_simulation': simulation_check,
           'checks': ['exact source-coordinate reconciliation', 'stable totals after replay', 'dry run has no inserts',
                      'retry across partitions', 'conflicting results', 'ambiguous transaction identity']}
 (ROOT / 'artifacts').mkdir(exist_ok=True)

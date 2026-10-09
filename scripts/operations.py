@@ -98,7 +98,7 @@ def cli(*args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['submit', 'savepoint', 'stop', 'restore', 'recover', 'integration', 'recovery-test', 'idle-resume-test', 'kafka-interruption'])
+    parser.add_argument('action', choices=['submit', 'savepoint', 'stop', 'restore', 'recover', 'integration', 'simulate-customers', 'recovery-test', 'idle-resume-test', 'kafka-interruption'])
     args = parser.parse_args()
     if args.action in ('submit', 'restore'):
         ensure_no_active_job()
@@ -113,6 +113,14 @@ def main():
             if not restored or not restored['is_savepoint'] or restored['external_path'] != options[1]:
                 raise AssertionError('Job did not restore the requested savepoint')
             (ROOT / 'artifacts/savepoint-restore.json').write_text(json.dumps({'job_id': jid, 'restored': restored}, indent=2) + '\n')
+    elif args.action == 'simulate-customers':
+        wait_running()
+        result = docker('exec', '-T', 'jobmanager', 'java', '-cp', '/opt/flink/usrlib/risk-engine.jar',
+                        'com.portfolio.paymentrisk.tools.CustomerSimulation', stdout=subprocess.PIPE, text=True)
+        report = json.loads([line for line in result.stdout.splitlines() if line.startswith('{')][-1])
+        (ROOT / 'artifacts').mkdir(exist_ok=True)
+        (ROOT / 'artifacts/customer-simulation.json').write_text(json.dumps(report, indent=2) + '\n')
+        print(json.dumps({k: v for k, v in report.items() if k != 'cases'}, indent=2))
     elif args.action in ('savepoint', 'stop'):
         savepoint(args.action == 'stop')
     elif args.action in ('recover', 'kafka-interruption'):

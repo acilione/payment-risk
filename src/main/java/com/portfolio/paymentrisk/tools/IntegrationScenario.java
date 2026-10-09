@@ -174,7 +174,7 @@ public final class IntegrationScenario {
                 late)));
   }
 
-  private static void awaitSourceCheckpoint(AppConfig config, long nextOffset) throws Exception {
+  static void awaitSourceCheckpoint(AppConfig config, long nextOffset) throws Exception {
     var properties = config.kafkaProperties();
     properties.put("bootstrap.servers", config.bootstrap());
     var partition = new org.apache.kafka.common.TopicPartition(config.topic("payments.raw"), 0);

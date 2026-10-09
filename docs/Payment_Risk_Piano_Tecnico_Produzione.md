@@ -587,3 +587,30 @@ I test aggiunti coprono identità stabile, variazione del contenuto, conflitto f
 - [ClickHouse ReplacingMergeTree](https://clickhouse.com/docs/reference/engines/table-engines/mergetree-family/replacingmergetree): la rimozione avviene durante i merge e non equivale a un vincolo di unicità.
 - [Flink Broadcast State](https://nightlies.apache.org/flink/flink-docs-release-2.2/docs/dev/datastream/fault-tolerance/broadcast_state/): gli aggiornamenti devono essere deterministici; l'ordine degli input non è un contratto globale di attivazione.
 - [Kafka consumer configuration](https://kafka.apache.org/43/generated/consumer_config.html): isolamento, intervallo massimo fra poll e comportamento degli offset appartengono al contratto operativo del consumer.
+
+## 13. Obiettivo del progetto e proporzione degli interventi
+
+L'obiettivo chiarito è simulare persone che effettuano pagamenti e riconoscere attività sospette. Il risultato da mostrare è una catena comprensibile: storia del cliente, segnali osservati, valutazione motivata, casi segnalati e casi mancati. Non è costruire l'intera infrastruttura di una banca. Il piano originario va quindi letto come una lista di problemi possibili, non come una lista di funzionalità tutte obbligatorie.
+
+### Cosa serve adesso
+
+- Identità coerenti e deduplica: un retry tecnico non deve diventare un secondo acquisto nella storia del cliente. Una nuova autorizzazione è invece un evento distinto nel dominio attuale.
+- Stato temporale corretto, regole spiegabili e ripristino verificato: senza questi elementi anche una buona regola può produrre risultati errati.
+- Comportamenti normali e sospetti plausibili, etichette indipendenti dal punteggio e un confronto esplicito con le decisioni. Una fixture che attiva tutte le regole dimostra il calcolo, non la qualità del rilevamento.
+- Limiti visibili: niente promessa di individuare tutte le frodi, unicità eterna o disponibilità bancaria sulla base di una demo locale.
+
+Le modifiche precedenti a identità, spiegazioni, replay e recovery sostengono questi obiettivi e rimangono. Alcune predisposizioni di deployment superano il minimo necessario per una dimostrazione: non sono una ragione per proseguire automaticamente verso HA multi-regione, IdP aziendale, ledger permanente o autorizzazione sincrona. Serviranno soltanto requisiti e ambienti concreti a giustificarli. Per il dominio simulato, un contratto di retry entro il TTL e il divieto di rigiocare ingressi storici nel job live restano limiti espliciti; non si dichiara risolta l'unicità senza scadenza.
+
+### Intervento coerente con l'obiettivo
+
+Aggiunto un dataset di nove storie sintetiche con dispositivi e clienti stabili, merchant, importi e successioni temporali motivati. Le storie comprendono acquisti abituali, acquisto costoso legittimo, cambio telefono, account takeover, card testing, più dispositivi, piccoli pagamenti ravvicinati, dispositivo conosciuto rubato e retry dopo un declino. Le etichette non entrano nella pipeline. Il report contiene la timeline e le evidenze, e confronta un pagamento finale per storia per evitare di confondere il numero di eventi di preparazione con il numero di casi valutati.
+
+La simulazione attraversa Kafka e Flink, legge solo output committed, ripete le consegne dei pagamenti finali e riconcilia tutti gli ID. La verifica del materializer confronta poi gli stessi risultati con ClickHouse. La CI conserva il report. I test locali esercitano anche il processore con stato e watermark. Le storie sono un replay breve di venti minuti di event time, non un campione rappresentativo della popolazione e non un test di capacità.
+
+Con le regole correnti, tre casi sospetti vengono segnalati, due sfuggono e un caso legittimo genera un allarme. Questi esiti sono conservati intenzionalmente, senza adattare le soglie per migliorare artificialmente il report. Il caso del telefono rubato mostra un limite informativo: se i campi osservati coincidono con un acquisto ordinario, serve un segnale ulteriore. Una frequenza elevata di piccoli pagamenti mostra invece un compromesso di soglia, da valutare anche su clienti legittimi con abitudini diverse.
+
+### Prossimi passi, senza ampliare indiscriminatamente lo scope
+
+Prima aumentare la varietà delle storie: frequenza e importi per cliente, storia di più giorni, cambi legittimi di abitudini e attacchi separati dalle regole che li devono riconoscere. Poi confrontare soglie e segnali su scenari di valutazione distinti da quelli usati per configurarli. Non usare la precisione di nove esempi come metrica commerciale e non introdurre machine learning senza dati e un confronto utile con le regole esistenti.
+
+La resilienza resta necessaria per non perdere o duplicare l'evidenza, ma il requisito proporzionato qui è un recovery dimostrabile con riconciliazione, non una promessa generica di essere "iper resiliente". Per dati reali andrebbero rivalutati retention, accessi, disponibilità, unicità durevole e costi degli errori insieme ai responsabili del servizio.

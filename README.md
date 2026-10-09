@@ -4,10 +4,13 @@ A Java application that evaluates payment events with Apache Flink. Kafka carrie
 
 The included producer generates synthetic EUR payments. The application calculates risk scores; it does not authorize payments or move money. [View the dashboard demo](https://acilione.github.io/payment-risk/).
 
+The project models customers making payments and detects suspicious patterns in their recent activity. Its purpose is to demonstrate ingestion, stateful risk rules, explainable results and recovery without double-counting deliveries. Infrastructure supports that exercise; multi-region banking operations and synchronous payment authorization are outside its scope.
+
 ## Contents
 
 - [Technologies](#technologies)
 - [Processing flow](#processing-flow)
+- [Customer simulation](#customer-simulation)
 - [Feature implementation](#feature-implementation)
 - [Data model](#data-model)
 - [Run locally](#run-locally)
@@ -46,7 +49,8 @@ flowchart LR
   P[Payment producer] --> K[(Kafka payments.raw)]
   K --> V[Decode and validate]
   V --> D[Deduplicate by event_id]
-  D --> E[Order and evaluate by customer_id]
+  D --> T[Check transaction_id identity]
+  T --> E[Order and evaluate by customer_id]
   R[(Kafka risk.rules)] --> RV[Validate rule updates]
   RV --> B[Broadcast rule state]
   B --> E
@@ -62,6 +66,38 @@ flowchart LR
 ```
 
 [PaymentRiskJob.java](src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java) builds this pipeline. Payments use `keyBy(event_id)` for deduplication, `keyBy(transaction_id)` to reject conflicting authorization results, then `keyBy(customer_id)` for rule evaluation. The final partitioning step places one customer's payments on the same processing task. Rule updates use broadcast state so every risk-processing task receives them.
+
+## Customer simulation
+
+`make simulate-customers` sends nine customer stories through the running local Kafka/Flink job and reads its committed decisions. The [scenario dataset](src/main/resources/customer-scenarios.json) defines recurring customer/device identities, merchant types, amounts, authorization outcomes and event times. [CustomerSimulation.java](src/main/java/com/portfolio/paymentrisk/tools/CustomerSimulation.java) publishes the payments; [CustomerScenarios.java](src/main/java/com/portfolio/paymentrisk/tools/CustomerScenarios.java) compares results and builds the report.
+
+Run this before other generators on **fresh local topics and a newly submitted job**, using the default policy:
+
+```bash
+make up run-job simulate-customers
+```
+
+The command refuses topics with previous records; it does not delete or reset data. Use an isolated local stack if the existing stack contains work you need to retain. Do not run another generator concurrently or restore previous Flink state for this exercise. The histories cover twenty minutes of event time and are published chronologically in a short replay, on one Kafka partition. They exercise customer state, not production traffic volume or twenty minutes of measured latency. A completed source checkpoint precedes separate watermark markers on all payment partitions. Markers are excluded from the labeled report.
+
+Each story has one independently authored label on its final payment. `SUSPICIOUS` means that the story describes malicious activity; it is not a confirmed fraud outcome from real customers. The engine receives only payment fields, never these labels or expected scores. Earlier payments establish history and are reconciled with output but do not enter the classification metrics.
+
+| Customer story | Scenario label | Default result on final payment | Interpretation |
+|---|---|---|---|
+| Coffee, groceries and transport on one phone | Legitimate | 0, APPROVE | Ordinary purchases remain unflagged. |
+| EUR 1,100 appliance purchase on a known phone | Legitimate | 0, APPROVE | Amount alone does not make a payment suspicious under these rules. |
+| EUR 900 laptop purchase after replacing a phone | Legitimate | 30, REVIEW | False alarm: new-device history cannot establish who owns the device. |
+| Rapid EUR 900 attempts across devices after four declines | Suspicious | 100, REJECT | All five signals combine. |
+| Four declined EUR 1 tests, then EUR 900 on the same device | Suspicious | 40, REVIEW | Decline history detects the pattern even though the device has already been seen. |
+| Three EUR 1,100 purchases from three devices in 80 seconds | Suspicious | 85, REJECT | Amount, device count and a new high-value device combine. |
+| Six EUR 5 payments within 75 seconds | Suspicious | 25, APPROVE | Miss: frequency alone is below the review threshold. |
+| EUR 70 purchase using a stolen, previously observed phone | Suspicious | 0, APPROVE | Miss: the available fields resemble ordinary activity. |
+| Legitimate EUR 20 retry after one decline | Legitimate | 0, APPROVE | One decline does not trigger the decline-history rule. |
+
+The final payment of each story is also delivered twice with identical event and transaction IDs. The report requires exactly one committed decision per unique input. A distinct authorization attempt gets a new transaction and event ID; a transport retry keeps both. The simulation does not model capture, refund or multiple lifecycle events for the same transaction.
+
+The report at `artifacts/customer-simulation.json` includes every customer's input/output timeline, rule evidence, scores and target classification. With `REVIEW` and `REJECT` counted as alerts, the nine labeled targets give 3 true positives, 1 false positive, 3 true negatives and 2 false negatives: precision 75%, recall 60%, false-positive rate 25%. **These are properties of nine deliberately selected stories, not estimates of real fraud detection quality.** `PASS` means that identities and expected rule behavior agree, including the documented misses. It does not mean that every suspicious payment was detected. CI additionally reconciles every scenario decision against the ClickHouse view used by the dashboard after replay.
+
+This exercise deliberately keeps the current thresholds. Lowering the review threshold to catch the small-payment burst would also flag more legitimate bursts; deciding whether that tradeoff is worthwhile requires a broader independently labeled population. Detecting access through a stolen trusted device needs additional evidence, such as authentication events or a longer customer baseline. No rule can infer intent from identical observed payment fields. Merchant and country are present in the inputs but the current five rules do not use them. The next useful domain extension is varied customer histories and independently specified attack episodes, followed by threshold comparison on separate evaluation scenarios, rather than more infrastructure.
 
 ## Feature implementation
 

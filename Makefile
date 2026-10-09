@@ -56,3 +56,7 @@ website-check:
 	npm --prefix web ci
 	npm --prefix web test
 	npm --prefix web run build
+
+.PHONY: simulate-customers
+simulate-customers:
+	python3 scripts/operations.py simulate-customers
