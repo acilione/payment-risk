@@ -52,7 +52,7 @@ try:
     deadline = time.monotonic() + 180
     while True:
         try:
-            stored = sql('SELECT * EXCEPT archived_at FROM risk.payment_ingress '
+            stored = sql('SELECT * EXCEPT (archived_at) FROM risk.payment_ingress '
                          'WHERE source_partition=0 AND source_offset IN (' + offsets + ')')
             if {int(row['source_offset']) for row in stored} == expected.keys():
                 break
