@@ -12,8 +12,8 @@ export interface Decision {
   rules_fingerprint: string;
   event_time: number;
   processed_at: number;
-  source_partition: number;
-  source_offset: number;
+  source_partition?: number;
+  source_offset?: number;
 }
 export interface Overview {
   generatedAt: string;
@@ -24,7 +24,7 @@ export interface Overview {
     approved: number;
     review: number;
     rejected: number;
-    finalizationP95: number;
+    finalizationP95: number | null;
   };
   series: {
     time: number;

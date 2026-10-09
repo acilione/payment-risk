@@ -350,7 +350,7 @@ function App() {
                 <Database size={15} />
                 <strong>Demo data</strong>
                 <span>
-                  Transactions, charts, and service status use sample data.
+                  All payment screens use the same synthetic scenarios.
                 </span>
               </span>
               <button
@@ -474,7 +474,11 @@ function App() {
                   <div className="card-heading">
                     <div>
                       <h2>Decisions over time</h2>
-                      <p>Payment counts by decision and time interval</p>
+                      <p>
+                        {demo
+                          ? "Counts by payment event time"
+                          : "Counts by decision processing time"}
+                      </p>
                     </div>
                     <span className="chip">
                       {window === "1h"
@@ -992,8 +996,9 @@ function App() {
             </p>
             <div className="source-position">
               <Database size={15} />
-              Kafka partition {selected.source_partition} · offset{" "}
-              {selected.source_offset}
+              {demo
+                ? "Synthetic engine fixture; no Kafka delivery"
+                : `Kafka partition ${selected.source_partition} / offset ${selected.source_offset}`}
             </div>
           </div>
         )}
@@ -1066,11 +1071,6 @@ function Stat({
       <strong className="stat-value">{value}</strong>
       <div className="stat-bottom">
         <span>{detail}</span>
-        <span className={`mini-chart ${chart}`} aria-hidden="true">
-          {[35, 55, 42, 73, 62, 88, 100].map((height, i) => (
-            <i key={i} style={{ height: `${height}%` }} />
-          ))}
-        </span>
       </div>
     </article>
   );

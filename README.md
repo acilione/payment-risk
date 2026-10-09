@@ -191,7 +191,7 @@ The API also reads Flink REST for the running job and latest checkpoint, and Pro
 
 [web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview–window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
 
-The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) supplies 48 sample decisions and sample chart/status data. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
+The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) derives totals and charts from the shared customer-scenario fixture. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
 
 ### Customer investigations
 
@@ -201,7 +201,7 @@ The **Investigations** section provides customer-ID prefix search, a decision fi
 
 The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
 
-The static demo offers three guided investigations: rapid attempts across devices, a legitimate replacement phone that triggers review, and a stolen trusted device that the rules miss. It includes all nine customer stories and 36 payments from the existing scenario dataset. [InvestigationFixtureTest](src/test/java/com/portfolio/paymentrisk/InvestigationFixtureTest.java) evaluates those inputs with the Java engine and checks the bundled fixture. Labels remain separate from engine inputs. To regenerate reviewed fixture changes, run `mvn -Dtest=InvestigationFixtureTest -Drisk.fixture.write=true test`, then format the website. The overview's older sample data is independent of this scenario fixture.
+The static demo offers three guided investigations: rapid attempts across devices, a legitimate replacement phone that triggers review, and a stolen trusted device that the rules miss. It includes all nine customer stories and 36 payments from the existing scenario dataset. [InvestigationFixtureTest](src/test/java/com/portfolio/paymentrisk/InvestigationFixtureTest.java) evaluates those inputs with the Java engine and checks the bundled fixture. Labels remain separate from engine inputs. To regenerate reviewed fixture changes, run `mvn -Dtest=InvestigationFixtureTest -Drisk.fixture.write=true test`, then format the website. Overview, Transactions and Investigations share this fixture. Demo totals, rule counts and charts are calculated from its decisions; demo time windows use payment event time, while live overview windows use processing time. Static service telemetry and checkpoints are displayed as unmeasured.
 
 ### Metrics and alerts
 

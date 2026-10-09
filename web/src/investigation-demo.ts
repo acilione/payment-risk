@@ -6,6 +6,12 @@ import type {
   TimelinePage,
 } from "./investigation-types";
 export const stories = fixture.cases;
+export const demoDecisions = stories.flatMap((story) =>
+  story.timeline.map((entry) => entry.decision),
+);
+export const demoEventTime = Math.max(
+  ...demoDecisions.map((decision) => decision.event_time),
+);
 const generatedAt = "2026-10-09T10:00:20.000Z";
 const summary = (story: (typeof stories)[number]): CustomerSummary => ({
   customer_id: story.target_payment.customer_id,
