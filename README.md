@@ -28,7 +28,7 @@ The included producer generates synthetic EUR payments. The application calculat
 | Jackson 2.21.7 | Represents decoded records, serializes the pending/history state, and constructs the canonical rule payload used for fingerprints. |
 | Embedded RocksDB | Stores Flink's keyed event, customer-history, and device state. Incremental checkpoints copy state to object storage. |
 | MinIO / Amazon S3 | Hold checkpoints and savepoints. Compose uses MinIO through Flink's S3 filesystem plugin; the Kubernetes configuration uses an S3 bucket. |
-| ClickHouse 26.8.2.7 | Stores decisions in `ReplacingMergeTree` and provides aggregates and transaction queries through a `FINAL` view. |
+| ClickHouse 26.8.2.7 | Stores evaluation deliveries in `MergeTree`; SQL views deduplicate logical evaluations and expose identity conflicts. |
 | React 19, TypeScript, Vite 8 | Implement and build the dashboard. Charts are rendered with SVG and CSS; Lucide provides icons. |
 | Node.js 24 and Fastify 5 | Serve the dashboard and its read-only API. The API queries ClickHouse, Flink REST, and Prometheus. |
 | Prometheus 3 and Grafana 13 | Collect Flink and application metrics, evaluate alerts, and display provisioned operational and risk dashboards. |
@@ -61,7 +61,7 @@ flowchart LR
   E -. checkpoints .-> S[(MinIO or S3)]
 ```
 
-[PaymentRiskJob.java](src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java) builds this pipeline. Payments first use `keyBy(event_id)` for deduplication, then `keyBy(customer_id)` for rule evaluation. The second partitioning step places one customer's payments on the same processing task. Rule updates use broadcast state so every risk-processing task receives them.
+[PaymentRiskJob.java](src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java) builds this pipeline. Payments use `keyBy(event_id)` for deduplication, `keyBy(transaction_id)` to reject conflicting authorization results, then `keyBy(customer_id)` for rule evaluation. The final partitioning step places one customer's payments on the same processing task. Rule updates use broadcast state so every risk-processing task receives them.
 
 ## Feature implementation
 
@@ -71,15 +71,15 @@ Kafka values use Confluent-compatible framing: a zero magic byte, a four-byte sc
 
 [RawDeserializer.java](src/main/java/com/portfolio/paymentrisk/source/RawDeserializer.java) calls validation before assigning the source event timestamp. This prevents malformed or far-future timestamps from advancing the watermark. [Validate.java](src/main/java/com/portfolio/paymentrisk/processor/Validate.java) checks the Avro record and the payment fields: nonblank identifiers, positive bounded amounts, EUR currency, ISO country codes, supported payment statuses, and positive event times no more than five minutes ahead of the validation clock. Payloads larger than 1 MiB are rejected.
 
-Invalid payments and invalid rule updates go to the `payments.dlq` side output. Each record includes the original topic, partition, offset, schema ID, error code, and up to 4,096 bytes of the Kafka value encoded as base64. Registry connection, authentication, and server failures propagate to Flink recovery instead of labeling valid payments as bad data.
+Invalid payments and invalid rule updates go to the `payments.dlq` side output. Each record includes the original topic, partition, offset, schema ID, error code, a SHA-256 payload fingerprint and byte count. Raw payloads are omitted by default. `DLQ_PAYLOAD_MODE=capture` retains a base64 prefix of at most 4,096 bytes and is accepted only in local mode. Registry connection, authentication, and server failures propagate to Flink recovery instead of labeling valid payments as bad data.
 
 ### Duplicate detection
 
-[Deduplicate.java](src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java) is a `KeyedProcessFunction` with `ValueState<Boolean>` named `event-seen-v1`. Because the input is keyed by `event_id`, the same event is suppressed even if it is submitted with a different customer ID or Kafka offset.
+[Deduplicate.java](src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java) keys state by `event_id`. It stores a seen flag and a SHA-256 fingerprint of the canonical payment fields, excluding the delivery timestamp `producer_time`. The same ID and content are suppressed. Reusing an ID with changed customer, amount, device or other business fields fails the job with `EVENT_IDENTITY_CONFLICT`; it cannot silently change customer history.
 
-The first occurrence writes `true` and passes downstream. Later occurrences increment a duplicate counter and produce no output. Flink's processing-time TTL defaults to 24 hours, uses `OnCreateAndWrite`, and never returns expired values. Reading a duplicate does not refresh the TTL, and downtime counts toward expiry. The state is checkpointed, so a restored job remembers IDs still within that period.
+Both states have a 24-hour processing-time TTL by default. Reading a duplicate does not extend it, and downtime counts toward expiry. This bounds state size, but is **not lifetime uniqueness**. Once state and customer history expire, historical input can affect new calculations if replayed into the live stream. Replay the committed decision log into the analytical store instead; historical payment recalculation needs an isolated job and explicit revision semantics.
 
-Deduplication checks event IDs, not transaction IDs. Two different events for one transaction can both be evaluated. The ClickHouse replacement key handles their query representation separately.
+Restoring an older savepoint preserves the Boolean state. A duplicate whose old state has no fingerprint fails with `EVENT_IDENTITY_UNVERIFIABLE`; the application does not guess whether its content matches. Plan the migration and resolve such records from the retained source log before resuming. A second keyed operator applies the same check to `transaction_id`: within the TTL, another event claiming that transaction fails before it can change customer features. This new state has no history when restoring an older savepoint. Beyond the TTL, multiple stored evaluations still produce an analytical integrity conflict until a business revision contract exists.
 
 ### Event-time ordering and late payments
 
@@ -89,7 +89,7 @@ Each Kafka payment partition has a bounded-out-of-order watermark with a default
 
 The processor compares incoming timestamps with both the current watermark and a checkpointed `finalized-through-v1` timestamp for that customer. A payment at or behind either cutoff goes to `payments.late` with the original payment, cutoff, lateness, and observation time. It does not revise a decision or update customer history. Keeping the finalized timestamp in managed state prevents old input from changing retained history after a source watermark resets during recovery.
 
-The rule stream marks itself idle because rule updates cannot define payment time. If all payment partitions become idle, the remaining buffered payments wait until valid input advances event time. Processing-time timers do not force them through. This is why a finite load run can leave its last few seconds pending.
+The rule stream marks itself idle because rule updates cannot define payment time. If all payment partitions become idle, the remaining buffered payments wait until valid input advances event time. Processing-time timers do not force them through. This is why a finite load run can leave its last few seconds pending. A processing-time watchdog observes the oldest queued payment every `PENDING_ALERT_MS` (60 seconds by default), logs overdue queues without customer identifiers, and increments a Prometheus counter. It never finalizes a payment. Pending records restored from a pre-watchdog savepoint acquire monitoring when the next payment arrives for that customer; monitoring old idle queues needs a migration or an external reconciliation check.
 
 ### Five risk rules and decision scoring
 
@@ -115,9 +115,15 @@ The `risk.rules` topic is compacted by `rule_id`. The CLI validates a JSON rule 
 
 Packaged rules start at version 1. An update must have a higher version than the current value; equal or older versions are ignored and counted. Setting `enabled: false` in a higher version disables a rule. Validation limits IDs to R001-R005, accepts only the five implemented types, and checks the score, currency, threshold, and window against retained history. `updated_at` is metadata, not a scheduled activation time.
 
-Each accepted payment stores a full rule snapshot alongside its pending record. A rule update therefore affects subsequently admitted payments without changing already buffered payments. `Rules.fingerprint` sorts rules and their fields and hashes the full payload plus the review/reject thresholds with SHA-256. The decision carries that fingerprint, not the full snapshot.
+Each accepted payment stores a full rule snapshot alongside its pending record. A rule update therefore affects subsequently admitted payments without changing already buffered payments. `Rules.fingerprint` sorts rules and their fields and hashes the full payload plus the review/reject thresholds with SHA-256. The decision carries that fingerprint, the complete snapshot, engine version, and observed values and score contributions for all five rules.
 
 Payments and rules are separate Kafka inputs with no shared activation order. After recovery, records replayed since the last checkpoint can arrive in a different cross-input order and receive a different snapshot. The fingerprint identifies the settings actually used; it does not make historical rule activation deterministic.
+
+### Immutable policy releases
+
+Set `POLICY_FILE` to a catalog such as [config/policy-default.json](config/policy-default.json), or provide `POLICY_CATALOG_JSON`. The catalog contains a policy ID, version, all five rule configurations, and classification thresholds. `POLICY_SHA256` optionally checks the exact file bytes. The Helm chart requires this checksum and a ConfigMap containing `policy.json`; create that ConfigMap as immutable.
+
+With a catalog, the job ignores broadcast updates and records this in a counter. Payments keep their catalog, thresholds and policy identity in pending state, including across restore. A change requires a new version and deployment. This avoids cross-stream ordering dependence for policy selection; it does not eliminate late input, missing history or data conflicts. `staging` and `production` reject startup without a catalog. Dynamic updates remain available locally for demonstrating broadcast state. A checksum detects accidental changes; it is not an approval signature.
 
 ### Customer state and recovery
 
@@ -141,13 +147,28 @@ State descriptors use explicit string, long, and integer serializers; JSON holds
 
 This coordinates Kafka source positions, Flink state, and Kafka output across recovery. Producer duplicate detection remains a separate feature, and ClickHouse inserts are outside that transaction. Each active deployment must have a unique transaction prefix. Kafka transactions allow fifteen minutes; checkpoint delays and recovery must fit within that timeout.
 
-### ClickHouse storage and repeated inserts
+### ClickHouse storage, uniqueness and retries
 
-[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) is a separate Java Kafka consumer. Auto-commit is disabled, isolation is `read_committed`, and each poll retrieves at most 500 decisions. The consumer decodes Avro, adds the decision topic's partition and offset, and sends a synchronous HTTP `INSERT ... FORMAT JSONEachRow` request to ClickHouse. It commits Kafka offsets only after a successful insert.
+[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 500 records per poll with `read_committed` and auto-commit disabled. Valid decisions go to `risk.evaluations`; malformed decisions go to `risk.materializer_rejections`, which contains source coordinates, error category, payload fingerprint and length, but no raw payload. Registry connection and authentication errors stop processing rather than classifying records as invalid.
 
-A crash between insertion and offset commit causes the same batch to be read and inserted again. [clickhouse.sql](infrastructure/docker/clickhouse.sql) handles this with `ReplacingMergeTree(source_offset) ORDER BY transaction_id`. The `risk.decisions_current` view runs `SELECT * FROM risk.decisions FINAL`, selecting the greatest offset for each transaction before background merges have removed repeated physical rows.
+The consumer commits Kafka offsets only after both synchronous inserts succeed. HTTP requests disable asynchronous inserts and wait for query completion. Network errors, HTTP 429 and server errors receive up to five attempts with exponential backoff and jitter; other HTTP errors stop immediately. Exhaustion leaves offsets uncommitted, and Compose restarts the consumer. Decode work has a 60-second budget, each HTTP request has a 10-second timeout, and the combined retry budget fits below the explicitly configured five-minute poll interval. An outage longer than Kafka retention can still lose recoverable input.
 
-Use that view for counts, sums, and transaction queries. The stored `source_partition` is tracing metadata; it is not part of the replacement key. Kafka offsets are comparable only within one partition, so a transaction must continue mapping to the same customer and decision partition. Changing the decision topic's partition count or producer partitioning requires a storage migration. The table has no time partition that could separate versions of the same transaction.
+A successful insert followed by a lost response or failed offset commit can produce another physical delivery. [clickhouse.sql](infrastructure/docker/clickhouse.sql) makes this explicit:
+
+| Table or view | Purpose |
+| --- | --- |
+| `evaluations` | Append-only deliveries, with full audit data and Kafka provenance. Physical retry rows are expected. |
+| `evaluations_logical` | One row per `evaluation_id`, delivery count and exact number of distinct business results. Processing time and source offsets do not create a new result. |
+| `transaction_integrity` / `integrity_conflicts` | Identify conflicting results for an evaluation and multiple evaluations for one transaction. No arbitrary offset chooses a winner. |
+| `decisions_current` | One unambiguous evaluation per transaction. Conflicting transactions are excluded. Always check integrity before publishing totals. |
+| `materializer_rejections` | Durable quarantine keyed by source topic, partition and offset; query with `FINAL`. |
+| `decisions` / `decisions_legacy` | Previous storage retained for migration. The new materializer does not write it. |
+
+`evaluation_id` is SHA-256 over the canonical tuple `(event_id, engine_version, policy_id, policy_version)`, prefixed with `eval_`. It deliberately excludes the score, observed features, processing time and Kafka offsets: changed results under the same identity must be detected as conflicts. `input_sha256` fingerprints the business input, separately. Old Avro decisions use the same identity algorithm with the `legacy` engine and `dynamic` policy; absent historical audit fields cannot be reconstructed.
+
+The API returns 503 when any stored conflict or quarantined decision exists. It never presents the remaining subset as complete totals. Its normal five-second cache and fifteen-second browser refresh still apply; this is an asynchronous dashboard, not an atomic accounting read. Direct SQL users must also inspect the integrity and quarantine views. Resolving a conflict needs an explicit reviewed data correction; no last-write-wins or automatic deletion is implemented.
+
+This provides logical uniqueness for stored analytical results while retaining deliveries. It does **not** provide a database uniqueness constraint, unlimited producer deduplication, or an accounting ledger. If physical business-row uniqueness is required, use a separate transactional registry with unique event/evaluation keys and a transactional outbox, then derive ClickHouse analytics from it. The [production-plan review](docs/Payment_Risk_Piano_Tecnico_Produzione.md#12-seconda-analisi-critica-e-interventi-sul-branch) explains that alternative and the remaining guarantees.
 
 ### Dashboard and read-only API
 
@@ -163,7 +184,7 @@ The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src
 
 ### Metrics and alerts
 
-Validation, deduplication, and customer processing register Flink counters for valid/invalid input, suppressed duplicates, late payments, accepted/stale rule updates, decision types, rule matches, and processed amounts. A 1,024-sample histogram measures the `RiskEngine.evaluate` call in microseconds, excluding state preparation, buffering, and transaction commit waits. Labels use the fixed rule IDs and decision types rather than customer or transaction IDs.
+Validation, deduplication, and customer processing register Flink counters for valid/invalid input, suppressed duplicates, late payments, accepted/stale rule updates, decision types, rule matches, and processed amounts. The materializer exposes committed/rejected record counts, retries, insert errors and duration, storage availability, last insert time, and sampled maximum consumer lag. Prometheus scrapes it internally and alerts on storage unavailability, rejected decisions and overdue pending payments. A 1,024-sample histogram measures the `RiskEngine.evaluate` call in microseconds, excluding state preparation, buffering, and transaction commit waits. Labels use the fixed rule IDs and decision types rather than customer or transaction IDs.
 
 Flink's Prometheus reporter exposes metrics on port 9249. [prometheus.yml](observability/prometheus/prometheus.yml) scrapes the JobManager and TaskManager every ten seconds. [Grafana provisioning](observability/grafana/provisioning) loads the dashboards from [dashboards/](dashboards).
 
@@ -207,7 +228,7 @@ Customer, merchant and device IDs are references supplied by the payment produce
 | Identifier | Meaning |
 | --- | --- |
 | `event_id` | Identifies a payment event. Flink suppresses repeated event IDs across all customers for the configured deduplication period. |
-| `transaction_id` | Identifies the business transaction. ClickHouse uses it to select one current decision per transaction. |
+| `transaction_id` | Identifies the business transaction. More than one evaluation is ambiguous in the current domain and requires review. |
 | `customer_id` | Groups payments for risk evaluation. It is also the Kafka key for payment producers provided by this project and for decision and late-event outputs. |
 | `decision_id` | Generated as `risk_` followed by `transaction_id`. It is not an independently generated identifier. |
 | `rule_id` | Identifies one rule configuration. Supported IDs are `R001` through `R005`. |
@@ -215,7 +236,7 @@ Customer, merchant and device IDs are references supplied by the payment produce
 
 A customer can have many payment events. Each evaluated event produces a decision containing its event, transaction and customer IDs. Invalid payments go to the dead-letter topic; late payments go to the late-event topic; duplicates are suppressed.
 
-Deduplication checks `event_id`, not `transaction_id`. Two events with different event IDs and the same transaction ID can both be evaluated, but ClickHouse will expose one current row for that transaction. Producers must therefore keep the meaning and customer assignment of each transaction ID consistent.
+Deduplication checks `event_id`. The current synthetic contract describes an authorization result, not captures, refunds or repeated authorization attempts. Multiple evaluations for the same transaction are preserved but excluded from the current view and block publication of dashboard totals. A future lifecycle schema must define attempts and business revisions explicitly.
 
 ### Types and timestamps
 
@@ -265,7 +286,7 @@ Schema: [`risk-rule.avsc`](schemas/risk-rule.avsc). The JSON file supplied to th
 
 The application starts with version 1 of each rule. Higher versions replace the current configuration; equal or older versions are ignored. Disable a rule by publishing a higher version with `enabled: false`.
 
-Each admitted payment stores a complete rule snapshot in pending state. A later update does not alter that snapshot. Decisions record the snapshot's fingerprint, not its full contents. The fingerprint includes all rule fields and the review and reject thresholds.
+Each admitted payment stores a complete rule snapshot in pending state. A later update does not alter that snapshot. Decisions record the full snapshot and its fingerprint. The fingerprint includes all rule fields and the review and reject thresholds.
 
 ### Risk decision
 
@@ -285,7 +306,13 @@ Schema: [`risk-decision.avsc`](schemas/risk-decision.avsc).
 | `reason_codes` | `array<string>` | Rule types corresponding to `matched_rules`, in the same order. |
 | `rules_fingerprint` | `string` | SHA-256 fingerprint of the rule snapshot and classification thresholds, encoded as 64 hexadecimal characters. |
 | `event_time` | `long` | Copied from the payment. |
-| `processed_at` | `long` | Time at which the engine evaluated the payment. |
+| `processed_at` | `long` | Time at which the engine evaluated the payment; never a business revision. |
+| `evaluation_id` | `string` | Stable event/engine/policy identity, independent of result content and delivery coordinates. |
+| `engine_version` | `string` | Evaluator release; must change when evaluation semantics change. |
+| `policy_id` / `policy_version` | `string` / `long` | Immutable policy release, or `dynamic` / `0` in local broadcast mode. |
+| `policy_snapshot` | `string` | Canonical JSON containing all rules and classification thresholds. |
+| `rule_evidence` | `array<RuleEvidence>` | Rule ID/version/type, enablement, window, threshold, observed value, eligibility, match and score contribution. Includes nonmatching rules. |
+| `input_sha256` | `string` | Canonical payment fingerprint excluding `producer_time`; empty on historical decisions. |
 
 ### Rejected and late records
 
@@ -300,9 +327,10 @@ Schema: [`dead-letter.avsc`](schemas/dead-letter.avsc). Payment and rule validat
 | `observed_at` | `long` | Time the rejection was recorded. |
 | `error_code` | `string` | Validation category, such as `INVALID_AMOUNT`, `SCHEMA_ERROR` or `DESERIALIZATION_ERROR`. |
 | `error_message` | `string` | `Rejected payment record` or `Rejected rule record`. |
-| `raw_payload` | `string` | Base64 encoding of up to the first 4,096 bytes of the original Kafka value. Empty for a null value. |
-| `payload_truncated` | `boolean` | Whether the original value exceeded 4,096 bytes. |
+| `raw_payload` | `string` | Empty by default. Local capture mode allows a base64 prefix of at most 4,096 bytes; base64 is not encryption. |
+| `payload_truncated` | `boolean` | Whether a nonempty value was omitted or exceeded the capture limit. |
 | `source_timestamp` | `long` | Kafka record timestamp, or `-1` when unavailable. |
+| `payload_sha256` / `payload_bytes` / `payload_mode` | `string` / `long` / `string` | Fingerprint, original length, and `omit` or local `capture` mode. |
 | `schema_id` | `int` | Schema ID read from a valid-looking wire header, or `-1` when unavailable. It need not refer to a registered schema. |
 
 Schema: [`late-event.avsc`](schemas/late-event.avsc).
@@ -426,6 +454,17 @@ Configuration requires `HISTORY_MS >= 15 minutes`, `DEVICE_HISTORY_MS >= 30 days
 
 Runtime workers look up existing schemas; they do not register them. `PlatformCli bootstrap` creates missing topics and registers schema versions. It does not change the configuration of existing topics. Run it under a separate provisioning identity, and register a new output contract before submitting the corresponding job. The registry enforces backward compatibility; tests also check every historical writer schema stored in the repository against the current reader.
 
+Additional settings:
+
+| Setting | Default / requirement |
+| --- | --- |
+| `POLICY_FILE` / `POLICY_CATALOG_JSON` | Mutually exclusive; a catalog is required outside local mode. |
+| `POLICY_SHA256` | Optional exact-file checksum; required by the Helm deployment. |
+| `DLQ_PAYLOAD_MODE` | `omit`; `capture` is local-only. Late-event records still contain the payment and need restricted access. |
+| `PENDING_ALERT_MS` | `60000`; observation only, never a finalization deadline. |
+| `MATERIALIZER_GROUP` | `risk-clickhouse-evaluations-v2`. |
+| `MATERIALIZER_METRICS_PORT` | `9405`; `/metrics` and `/health/ready`, internal to Compose. |
+
 ### Flink runtime defaults
 
 | Setting | Compose | Helm |
@@ -444,6 +483,24 @@ Runtime workers look up existing schemas; they do not register them. `PlatformCl
 Retained external checkpoints survive job cancellation. When no runtime checkpoint interval is set, the job enables checkpoints at thirty seconds.
 
 ## Operations
+
+### Materializer replay and migration
+
+`MaterializerReplay` reads only committed **decisions**. By default it performs a dry run. It captures each partition's start and last-stable end offset, assigns those partitions directly, never commits offsets or uses the live consumer group, limits execution to ten minutes and 100,000 records, and defaults to 500 records per second. `--execute --reason "..."` enables writes; `--max-records` (up to one million) and `--rate` (up to 5,000) control bounds. Each attempt writes a UUID-named JSON manifest under `artifacts/` and prints the final report, including offset ranges, record counts, status and source-coordinate digest. Preserve this directory outside ephemeral containers. A failed attempt may have partially inserted deliveries; the same range can be replayed without double counting.
+
+```bash
+# With the application's Kafka, registry and ClickHouse environment configured:
+java -cp target/risk-engine.jar com.portfolio.paymentrisk.tools.MaterializerReplay
+java -cp target/risk-engine.jar com.portfolio.paymentrisk.tools.MaterializerReplay \
+  --execute --reason "Rebuild analytics after reviewed storage recovery"
+# Local synthetic stack: replay twice, reconcile exact source coordinates, test conflicts.
+python3 scripts/verify-materializer.py
+```
+
+For an existing deployment, back up ClickHouse and capture consumer offsets first. Stop the old materializer and the website, apply [clickhouse.sql](infrastructure/docker/clickhouse.sql) explicitly (initialization scripts do not rerun on existing volumes), then backfill `evaluations` from retained committed decisions. The new local group is `risk-clickhouse-evaluations-v2`; staging/production require explicitly initialized committed offsets. Reconcile before reopening the website. Compare old transaction coverage as well as source positions: decisions already expired from Kafka need a retained archive. The old replacing table may already have discarded conflicting versions, so it cannot recreate a complete audit trail. If coverage is incomplete, stop the migration instead of declaring it successful.
+
+Rollback requires the captured database/view state and consumer offsets, plus compatible Flink state and reader schemas. Do not simply redeploy the old materializer against the new view. New Avro fields have defaults, and existing operator UIDs remain stable, but old deduplication fingerprints and watchdog timestamps do not exist in earlier savepoints; their limits are documented above.
+
 
 ### Publish a rule update
 
@@ -481,7 +538,7 @@ Preserve operator UIDs, state descriptor names, serializer behavior, and maximum
 | Checkpoints fail or stop completing | Object-store connectivity and credentials, the Flink S3 plugin, disk space, state size, and backpressure. Kafka's broker transaction timeout must allow 900,000 ms. |
 | Customer state hits a limit | A heavily used customer, stalled watermarks, retention settings, and pending/history/device counts. Adding partitions cannot split one customer's keyed state across tasks. |
 | ClickHouse rows stop arriving | Materializer logs, ClickHouse availability, and decision-topic consumer lag. Failed inserts leave offsets uncommitted so records can be replayed. |
-| Raw ClickHouse counts seem too high | Query `risk.decisions_current`; physical rows can include retries and older versions of a transaction. |
+| Raw ClickHouse counts seem too high | Query `risk.decisions_current`; physical deliveries include retries. Check `integrity_conflicts` and quarantine before publishing results. |
 
 Use the Flink UI and `docker compose logs --tail=100 jobmanager taskmanager materializer` to inspect failures. Compose uses one standalone JobManager, so JobManager loss requires resubmission from retained state. `make recovery-test` exercises worker recovery; `python3 scripts/operations.py kafka-interruption` tests a broker interruption.
 
@@ -499,7 +556,7 @@ Late events have already passed deduplication. Reusing the same ID within the TT
 
 The [Helm chart](infrastructure/helm/payment-risk) creates a `FlinkDeployment` for an existing Flink Kubernetes Operator 1.15.0 installation. It configures RocksDB, object-store checkpoints and savepoints, Kubernetes JobManager recovery metadata, resource limits, savepoint-based upgrades, RBAC, restricted egress, and non-root pods. `allowNonRestoredState: false` prevents an upgrade from silently dropping state.
 
-The chart requires an immutable application image digest, Kafka and registry endpoints, an S3 bucket, a unique transaction prefix, an existing credentials Secret, and allowed egress CIDRs. The Secret supplies `kafka.properties` and any registry token. Payment groups must already have committed offsets or be restored from a savepoint; the rules source starts from the earliest available compacted records. Kafka, the registry, analytics services, and the operator are provisioned separately.
+The chart requires an immutable application image digest, Kafka and registry endpoints, an S3 bucket, a unique transaction prefix, an existing credentials Secret, an immutable policy ConfigMap (`policyConfigMap`) with its exact SHA-256 (`policySha256`), and allowed egress CIDRs. The Secret supplies `kafka.properties` and any registry token. Payment groups must already have committed offsets or be restored from a savepoint; the rules source starts from the earliest available compacted records. Kafka, the registry, analytics services, and the operator are provisioned separately.
 
 ```bash
 helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.15.0/

@@ -18,10 +18,14 @@ import org.junit.jupiter.api.Test;
 class StateOperatorsTest {
   private KeyedBroadcastOperatorTestHarness<String, String, String, String> harness()
       throws Exception {
+    return harness(AppConfig.from(Map.of()));
+  }
+
+  private KeyedBroadcastOperatorTestHarness<String, String, String, String> harness(
+      AppConfig config) throws Exception {
     var operator =
         new CoBroadcastWithKeyedOperator<String, String, String, String>(
-            new CustomerRiskProcessor(AppConfig.from(Map.of())),
-            List.of(CustomerRiskProcessor.RULES));
+            new CustomerRiskProcessor(config), List.of(CustomerRiskProcessor.RULES));
     var h =
         new KeyedBroadcastOperatorTestHarness<String, String, String, String>(
             operator, s -> Json.read(s).path("customer_id").asText(), Types.STRING, 128, 1, 0);
@@ -204,8 +208,68 @@ class StateOperatorsTest {
       h.setStateTtlProcessingTime(200);
       var replay =
           RiskEngineTest.tx("same", 1000, 100, "d", "APPROVED").put("customer_id", "another");
-      h.processElement(new StreamRecord<>(Json.write(replay)));
+      assertThrows(
+          IllegalStateException.class,
+          () -> h.processElement(new StreamRecord<>(Json.write(replay))));
       assertTrue(h.extractOutputValues().isEmpty());
+    }
+  }
+
+  @Test
+  void watchdogNeverFinalizesPaymentsAndStopsWhenQueueDrains() throws Exception {
+    try (var h = harness(AppConfig.from(Map.of("PENDING_ALERT_MS", "1000")))) {
+      h.processElement(tx("pending", 100_000), 100_000);
+      h.setProcessingTime(5000);
+      assertTrue(h.extractOutputValues().isEmpty());
+      assertEquals(1, h.numProcessingTimeTimers());
+      h.processWatermark(100_000);
+      assertEquals(1, h.extractOutputValues().size());
+      assertEquals(0, h.numProcessingTimeTimers());
+    }
+  }
+
+  @Test
+  void frozenPolicyIgnoresBroadcastInterleaving() throws Exception {
+    String catalog =
+        java.nio.file.Files.readString(java.nio.file.Path.of("config/policy-default.json"));
+    var config = AppConfig.from(Map.of("POLICY_CATALOG_JSON", catalog));
+    try (var before = harness(config);
+        var after = harness(config)) {
+      var rule = (ObjectNode) Rules.defaults().get(0);
+      rule.put("version", 2).put("threshold", 0).put("score", 100);
+      before.processBroadcastElement(Json.write(rule), 0);
+      before.processElement(tx("event", 100_000), 100_000);
+      after.processElement(tx("event", 100_000), 100_000);
+      after.processBroadcastElement(Json.write(rule), 0);
+      before.processWatermark(100_000);
+      after.processWatermark(100_000);
+      var a = (ObjectNode) Json.read(before.extractOutputValues().get(0));
+      var b = (ObjectNode) Json.read(after.extractOutputValues().get(0));
+      a.remove("processed_at");
+      b.remove("processed_at");
+      assertEquals(a, b);
+      assertEquals("payment-risk-eur-demo", a.path("policy_id").asText());
+      assertEquals(0, a.path("risk_score").asInt());
+    }
+  }
+
+  @Test
+  void anotherEventForSameTransactionCannotInflateCustomerFeatures() throws Exception {
+    try (var h =
+        new KeyedOneInputStreamOperatorTestHarness<String, String, String>(
+            new KeyedProcessOperator<>(new Deduplicate(10000, "TRANSACTION")),
+            v -> Json.read(v).path("transaction_id").asText(),
+            Types.STRING)) {
+      h.open();
+      var first = RiskEngineTest.tx("event-a", 1000, 100, "d", "APPROVED");
+      h.processElement(new StreamRecord<>(Json.write(first)));
+      first.put("event_id", "event-b");
+      var error =
+          assertThrows(
+              IllegalStateException.class,
+              () -> h.processElement(new StreamRecord<>(Json.write(first))));
+      assertTrue(error.getMessage().contains("TRANSACTION_IDENTITY_CONFLICT"));
+      assertEquals(1, h.extractOutputValues().size());
     }
   }
 }

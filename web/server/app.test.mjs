@@ -74,18 +74,20 @@ test("invalid source telemetry is unavailable; analytics normalize ClickHouse nu
         );
         assert.equal(options.headers["X-ClickHouse-Key"], "test-only");
         body = {
-          data: options.body.includes("AS transactions")
-            ? [
-                {
-                  transactions: "2",
-                  amountMinor: "1299",
-                  approved: "1",
-                  review: "1",
-                  rejected: "0",
-                  finalizationP95: "21000",
-                },
-              ]
-            : [],
+          data: options.body.includes("AS unresolved")
+            ? [{ unresolved: "0" }]
+            : options.body.includes("AS transactions")
+              ? [
+                  {
+                    transactions: "2",
+                    amountMinor: "1299",
+                    approved: "1",
+                    review: "1",
+                    rejected: "0",
+                    finalizationP95: "21000",
+                  },
+                ]
+              : [],
         };
       }
       return { ok: true, json: async () => body };
@@ -104,4 +106,26 @@ test("invalid source telemetry is unavailable; analytics normalize ClickHouse nu
   );
   assert.equal(result.job, null);
   assert.equal(result.checkpoint, null);
+});
+
+test("conflicting or quarantined decisions prevent publishing analytical totals", async () => {
+  const reader = createReader(
+    {
+      clickhouse: "http://analytics",
+      flink: "http://flink",
+      prometheus: "http://metrics",
+    },
+    async (url, options) => ({
+      ok: true,
+      json: async () =>
+        url.includes("analytics")
+          ? {
+              data: options.body.includes("AS unresolved")
+                ? [{ unresolved: "1" }]
+                : [],
+            }
+          : { jobs: [] },
+    }),
+  );
+  await assert.rejects(reader("1h"), /integrity requires review/);
 });

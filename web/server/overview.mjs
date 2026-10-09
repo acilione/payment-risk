@@ -29,7 +29,7 @@ export function createReader(
     const seconds = windows[window];
     const bucket = seconds / 30;
     const where = `processed_at >= toUnixTimestamp64Milli(now64()) - ${seconds * 1000}`;
-    const [totals, series, rules, decisions, cluster, metrics] =
+    const [totals, series, rules, decisions, cluster, metrics, integrity] =
       await Promise.allSettled([
         sql(
           `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileExact(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_current WHERE ${where}`,
@@ -51,9 +51,18 @@ export function createReader(
               "max(flink_taskmanager_job_task_operator_KafkaSourceReader_KafkaConsumer_records_lag_max)",
             ),
         ),
+        sql(
+          "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS unresolved",
+        ),
       ]);
     if ([totals, series, rules, decisions].some((x) => x.status === "rejected"))
       throw new Error("Analytics unavailable");
+    if (
+      integrity.status !== "fulfilled" ||
+      integrity.value.length !== 1 ||
+      Number(integrity.value[0].unresolved) !== 0
+    )
+      throw new Error("Analytics integrity requires review");
     const numeric = (row, fields) =>
       Object.fromEntries(
         Object.entries(row).map(([k, v]) => [
