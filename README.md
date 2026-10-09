@@ -189,9 +189,19 @@ New input topics disable automatic time and size retention, and the archive has 
 
 The API also reads Flink REST for the running job and latest checkpoint, and Prometheus for Kafka source lag. Kafka status is inferred from source metrics; it is not a direct broker probe. A checkpoint is marked current when it completed within three minutes. Finalization p95 estimates `processed_at - event_time` using `quantileTDigest`; it excludes the later Kafka commit wait. Amounts, counts and identity checks remain exact. API and integrity queries have a 256 MiB memory limit and spill aggregation/sorting to disk after 64 MiB. Failed queries return errors rather than partial totals.
 
-[web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview?window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
+[web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview–window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
 
 The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) supplies 48 sample decisions and sample chart/status data. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
+
+### Customer investigations
+
+The **Investigations** section provides customer-ID prefix search, a decision filter, a payment timeline and recorded rule evidence. Select a payment to see all five rules, including nonmatches, observed values, thresholds, eligibility and score contributions. The provenance panel shows event time, evaluation time, engine and policy versions, the policy snapshot and the decision's Kafka coordinates.
+
+[Investigations.tsx](web/src/Investigations.tsx) owns this screen. [investigation.mjs](web/server/investigation.mjs) provides two read-only endpoints: `/api/investigations/customers` and `/api/investigations/timeline`. ClickHouse parameters carry user input; queries have the same time and memory limits as the overview. Pages contain at most 20 rows. Customer pages use the customer ID as a cursor; timeline pages use `(event_time, evaluation_id)` so equal timestamps have a stable order. Reads check the existing integrity and quarantine views before returning data. Pagination operates on current data, not a fixed historical snapshot.
+
+The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
+
+The static demo offers three guided investigations: rapid attempts across devices, a legitimate replacement phone that triggers review, and a stolen trusted device that the rules miss. It includes all nine customer stories and 36 payments from the existing scenario dataset. [InvestigationFixtureTest](src/test/java/com/portfolio/paymentrisk/InvestigationFixtureTest.java) evaluates those inputs with the Java engine and checks the bundled fixture. Labels remain separate from engine inputs. To regenerate reviewed fixture changes, run `mvn -Dtest=InvestigationFixtureTest -Drisk.fixture.write=true test`, then format the website. The overview's older sample data is independent of this scenario fixture.
 
 ### Metrics and alerts
 
@@ -706,6 +716,14 @@ The materializer check replays decisions twice, reconciles exact source coordina
 
 `make verify-deployment` renders the chart and validates it against the Operator CRD; it needs Helm and the Python packages declared in CI. Prometheus alert tests run with `promtool test rules alerts.test.yml` from `observability/prometheus`. The website browser script accepts `--static` for a running static demo and otherwise checks the live API as well.
 
+### Load experiments
+
+Run the state experiment with `mvn -Dtest=StateLoadTest -Drisk.load=true test`. [StateLoadTest](src/test/java/com/portfolio/paymentrisk/StateLoadTest.java) exercises the real customer operator with embedded RocksDB and writes `artifacts/state-load.json`. It compares every score and rule observation with an in-memory reference and checks the first decision after checkpoint restoration. The measured operation includes admission, JSON/state access and watermark finalization. It excludes Kafka, network transport, checkpoint-driven output commits and production scheduling.
+
+With ClickHouse running and local credentials in `.env`, run `node --env-file=.env scripts/benchmark-investigation.mjs`. The script creates a uniquely named database, inserts 1,000, 10,000 and 50,000 logical decisions plus 10% duplicate deliveries, and exercises the production overview and investigation readers at concurrency 1 and 4. It checks counts and cursor pagination, records errors as well as latency, writes `artifacts/investigation-load.json`, and removes only its own database. Health probes are stubbed; SQL reads, integrity checks and JSON decoding are real.
+
+These are exploratory budgets defined before the experiments: 1,000 operator decisions/second for small histories, operation p99 below 20 ms for typical/active/high-cardinality profiles, and 50 ms for dense-key operations and same-timestamp finalization. The query budget is 2 seconds with no errors. These values guide the portfolio's next optimization; they are not an agreed production SLA. Three requests at concurrency 1 and twelve at concurrency 4 per stage provide a small diagnostic sample, not a reliable production p99 estimate.
+
 ### Build and release workflows
 
 [GitHub Actions](.github/workflows) runs Java formatting/tests, Compose and schema checks, integration/recovery scenarios, alert and dashboard-query checks, and Helm/Terraform validation. Maven CycloneDX creates a software bill of materials, and Trivy scans dependencies and images. The website workflow runs API tests, TypeScript compilation, formatting, npm audit, and Playwright checks before publishing the static build to GitHub Pages.
@@ -714,20 +732,52 @@ The tagged release workflow builds and scans an application image, runs integrat
 
 ## Performance
 
-Rule evaluation makes one pass over retained customer history. Its cost grows with history size, and same-timestamp buckets still require in-memory sorting and JSON rewrites. One heavily used customer remains on one task regardless of total parallelism. ClickHouse integrity views also aggregate historical deliveries; query memory limits and disk spilling do not remove that cost.
+### Customer-state load
 
-The generator waits for each Kafka acknowledgment, so the requested rate alone does not measure pipeline capacity. Measure throughput, state growth, backlog and recovery under representative customer distributions before increasing load.
+On 9 October 2026, three separate JVM runs exercised the current customer operator with embedded RocksDB on WSL2 (20 logical CPUs, Java 17, 4 GiB maximum JVM heap). Each run used a separate 300-event warmup, default rules, one processing subtask and a one-hour history. Source event times advance by 100 ms except in the same-timestamp profile. [Recorded results](docs/evidence/state-load-2026-10-09.json) include environment details, source hashes, checkpoint sizes, restore times and every run.
 
-A local run recorded on 2026-09-09, before the input archive and memory changes, used 1,000 events at a requested 100 events/second, three payment partitions, Flink parallelism 2, a ten-second watermark allowance, and ten-second checkpoints. It ran on WSL2 with 20 logical CPUs and 15.46 GiB guest memory, alongside other development services.
+| Workload | Payments / customers | Operator decisions/sec, observed range | Operation p99, observed range |
+|---|---:|---:|---:|
+| Small customer histories | 5,000 / 1,000 | 1,122–2,208 | 0.93–1.96 ms |
+| Active customer | 1,000 / 1 | 534–986 | 2.87–5.87 ms |
+| Dense customer history | 5,000 / 1 | 126–229 | 9.28–17.95 ms |
+| High cardinality | 5,000 / 5,000 | 1,425–2,861 | 0.82–1.73 ms |
+| One timestamp burst | 1,000 / 1 | 127–219 | 10.34–18.90 ms |
 
-| Measurement | Recorded result |
-|---|---:|
-| Acknowledged / committed / duplicate IDs | 1,000 / 1,000 / 0 |
-| Acknowledged input rate | 99.99 events/second |
-| Arrival to committed Kafka visibility, p50 / p95 / p99 | 16.329 / 20.793 / 21.192 seconds |
-| Event time to evaluation, p50 / p95 / p99 | 10.797 / 11.257 / 11.334 seconds |
-| Rolling evaluation p95 for the two subtasks | 541.6 / 530 microseconds |
+Every profile produced the expected number of distinct decisions, with exact scores and rule evidence; the first post-restore decision also matched the reference. The host's caches and CPU frequency were uncontrolled, and the run-to-run spread is substantial. These figures describe operator service time, not Kafka-to-database throughput or committed-result latency. No production capacity claim follows from this short experiment.
 
-These are separate measurements. The evaluation histogram covers the rule calculation, while visible output also waits for event ordering and checkpoint-driven Kafka commits. The short run does not establish sustained capacity or long-term state size.
+A separate GitHub Actions run on four vCPUs with Java 21 produced 975 decisions/sec for small histories, slightly below the 1,000/sec exploratory target, and 68/sec for the dense-key profile. Its small-history p99 was 1.69 ms. This single run is not a controlled hardware comparison, but it prevents treating the local throughput as a guaranteed deployment rate. The small-history shortfall alone does not establish that history scans dominate the workload.
 
-Run `make benchmark`, or `python3 scripts/benchmark.py --count 1000 --rate 100`, to record another measurement in `artifacts/benchmark.json`. Compare exact acknowledged and committed IDs, duplicates, lag, latency, state size, and checkpoint duration while keeping every input partition advancing. Test steady traffic, bursts, heavily used customers, many distinct customers, duplicates, and out-of-order events separately.
+The same-timestamp percentile needs particular care: most operations only admit a payment; the last one also finalizes the whole bucket. That finalization took **124–225 ms**, exceeding the declared 50 ms burst budget in all three runs. It accounted for only 2.7–3.5% of total burst processing time. The source code repeatedly decodes and rewrites the growing pending JSON bucket during admission, so changing the pending-state representation deserves investigation before optimizing only rule arithmetic.
+
+For ordinary customer histories, these results do not yet justify migrating to incremental aggregates. Dense keys show the expected scan cost, and one key still runs on one subtask. A workload requiring hundreds of payments per second for the same customer would need a separate capacity test and likely a different state representation. Any aggregate experiment must preserve exact `(t - window, t]` boundaries, same-timestamp ordering, policy snapshots, distinct-device counts and restore behavior. It must match full rule evidence, not just the final score.
+
+### Analytical query load
+
+The [ClickHouse experiment](docs/evidence/investigation-load-2026-10-09.json) ran on a four-vCPU, 16 GB GitHub Actions runner with the synthetic Compose stack active, using ClickHouse 26.8.2.7. It retained 1,000 customers and grew from 1,000 to 50,000 distinct decisions, with 10% additional physical deliveries. Counts remained exact. Pagination covered 1,000 customers across 50 pages and 50 customer payments across three pages, including equal event timestamps.
+
+| Logical decisions | Customer search p95, concurrency 1 / 4 | Timeline p95, concurrency 1 / 4 | Overview p95, concurrency 1 / 4 |
+|---|---:|---:|---:|
+| 1,000 | 53 / 164 ms | 92 / 161 ms | 85 / 491 ms |
+| 10,000 | 147 / 569 ms | 409 / 702 ms | 446 / 1,189 ms |
+| 50,000 | 1,603 / 3,504 ms | 2,205 / 5,316 ms | 3,154 ms / 12 of 12 requests failed |
+
+All calls succeeded through 10,000 decisions. At 50,000, the 2-second budget was exceeded and concurrent overview reads failed; failed requests are not reported as successful latency measurements. The first run did not record the underlying exception category. The reproducible script now records ClickHouse error responses for diagnosis.
+
+These are direct reader calls with real integrity checks and SQL, bypassing the overview route's five-second cache and concurrent-request sharing. They model cold query work, not four browser requests benefiting from the same cache entry. The small sample sizes and shared runner limit statistical confidence. Nevertheless, the measured query cost is large enough to require work before targeting this volume with interactive concurrency.
+
+The next analytical experiment should reduce repeated full-history integrity/decision scans and compare a customer/time-ordered serving view that preserves exact evaluation identities and conflict detection. Precomputed business totals must be derived from validated logical evaluations, with a documented refresh boundary and reconciliation. The current release keeps exact reads and returns errors when query limits are exceeded.
+
+### Scope and design choices
+
+Recent scoring state, retained payment history and investigative workflows have different retention and access requirements. The implementation keeps them separate and reuses the current services where they fit.
+
+| Proposal | Current decision |
+|---|---|
+| Customer investigation | Implemented using existing decision evidence, bounded ClickHouse reads and the synthetic customer stories. |
+| Incremental Flink features | Deferred for ordinary histories. Measure denser keys and pending-bucket costs before choosing an exact aggregate representation or a state migration. |
+| Redis | No current requirement for external feature serving; moving the same history across a network would not remove its scan cost. |
+| Analyst case management | Deferred until ownership, authentication, editable states and an audit workflow are defined. ClickHouse remains the analytical store. |
+| Accounts, transfers and relationship graphs | A separate domain extension. Model account roles and transfer endpoints first; merchant IDs are not bank counterparties. Start with concrete SQL queries before considering Neo4j. |
+
+Precomputed database totals also need a replay-safe design. A naive sum over incoming delivery rows counts retries. ClickHouse incremental materialized views operate on inserted blocks, so they are not automatically a globally deduplicated projection; see the [ClickHouse materialized-view documentation](https://github.com/ClickHouse/clickhouse-docs/blob/main/docs/materialized-view/incremental-materialized-view.md). Any replacement must preserve evaluation identity and expose later conflicts, with a verified backfill and reconciliation procedure.

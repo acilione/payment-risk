@@ -226,7 +226,10 @@ export function Investigations({ demo }: { demo: boolean }) {
                   >
                     <strong>{c.customer_id}</strong>
                     <span>
-                      {c.payments} payments <b>{c.alerts} alerts</b>
+                      {c.payments} payments{" "}
+                      <b>
+                        {c.alerts} {c.alerts === 1 ? "alert" : "alerts"}
+                      </b>
                     </span>
                     <small>Last event {date(c.lastEvent)}</small>
                   </button>
@@ -299,7 +302,8 @@ export function Investigations({ demo }: { demo: boolean }) {
                   </p>
                 </div>
                 <small>
-                  Read {new Date(timeline.generatedAt).toLocaleString("en-GB")}
+                  {demo ? "Fixture" : "Read"}{" "}
+                  {date(Date.parse(timeline.generatedAt))}
                   <br />
                   Source:{" "}
                   {demo ? "synthetic engine fixture" : "ClickHouse decisions"}

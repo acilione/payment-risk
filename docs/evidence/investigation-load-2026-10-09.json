@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-09",
+  "run": "https://github.com/acilione/payment-risk/actions/runs/37935965599",
+  "source_branch_head": "770b2c37fdd610f7040673bf9b90f0dbf09c7363",
+  "clickhouse_image": "clickhouse/clickhouse-server:26.8.2.7",
+  "qualification": "Shared four-vCPU GitHub runner with the synthetic Compose stack running. Reader calls bypass Fastify caching and request coalescing. First run did not retain upstream failure categories; do not infer a specific error cause from elapsed time alone.",
+  "report": {
+    "sourceCommit": "c456012dd77c2cf2ed95de5f2339f9fb6cb95287",
+    "generatedAt": "2026-10-09T13:29:56.601Z",
+    "environment": {
+      "platform": "linux",
+      "cpus": 4,
+      "memoryBytes": 16766414848
+    },
+    "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+    "budgets": {
+      "requestP95Ms": 2000,
+      "errors": 0
+    },
+    "stages": [
+      {
+        "logicalPayments": 1000,
+        "physicalDeliveries": 1100,
+        "checks": [],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 46.756392000000005,
+            "p95Ms": 53.04300599999999,
+            "maxMs": 53.04300599999999,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 80.678944,
+            "p95Ms": 163.57782499999996,
+            "maxMs": 163.57782499999996,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 74.53991800000006,
+            "p95Ms": 92.49107700000002,
+            "maxMs": 92.49107700000002,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 138.9912220000001,
+            "p95Ms": 160.92180299999995,
+            "maxMs": 160.92180299999995,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 66.70340199999987,
+            "p95Ms": 85.16617900000006,
+            "maxMs": 85.16617900000006,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 249.84577199999967,
+            "p95Ms": 491.19945099999995,
+            "maxMs": 491.19945099999995,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 10000,
+        "physicalDeliveries": 11000,
+        "checks": [
+          "1000 customers across 50 pages, no duplicate or missing IDs"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 141.44876599999952,
+            "p95Ms": 146.7823510000003,
+            "maxMs": 146.7823510000003,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 341.43491600000016,
+            "p95Ms": 568.7620509999997,
+            "maxMs": 568.7620509999997,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 385.5512980000003,
+            "p95Ms": 409.034036,
+            "maxMs": 409.034036,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 537.4892759999993,
+            "p95Ms": 702.3521489999994,
+            "maxMs": 702.3521489999994,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 300.18139599999995,
+            "p95Ms": 445.6161350000002,
+            "maxMs": 445.6161350000002,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 1095.3512279999995,
+            "p95Ms": 1188.7146279999997,
+            "maxMs": 1188.7146279999997,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 50000,
+        "physicalDeliveries": 55001,
+        "checks": [
+          "50 customer payments across 3 timeline pages; physical retries counted once"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 1387.8582080000015,
+            "p95Ms": 1603.3871700000018,
+            "maxMs": 1603.3871700000018,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 2269.883535000001,
+            "p95Ms": 3504.030246000002,
+            "maxMs": 3504.030246000002,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 1744.7813119999992,
+            "p95Ms": 2204.7079809999996,
+            "maxMs": 2204.7079809999996,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 4810.858779000002,
+            "p95Ms": 5315.544291999999,
+            "maxMs": 5315.544291999999,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "samples": 3,
+            "p50Ms": 2131.5490370000043,
+            "p95Ms": 3153.6146309999967,
+            "maxMs": 3153.6146309999967,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "samples": 12,
+            "p50Ms": 4204.231279,
+            "p95Ms": 4306.972990000009,
+            "maxMs": 4306.972990000009,
+            "errors": 12,
+            "withinBudget": false
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -13,13 +13,18 @@ async function sql(query) {
   if (!response.ok) throw new Error(`ClickHouse status ${response.status}: ${(await response.text()).slice(0,200)}`);
   return response.text();
 }
+const queryErrors = [];
 const fetcher = async (url, options = {}) => {
-  if (String(url).startsWith(config.clickhouse)) return fetch(url, { ...options, body: options.body.replaceAll("risk.", database + ".") });
+  if (String(url).startsWith(config.clickhouse)) {
+    const response = await fetch(url, { ...options, body: options.body.replaceAll("risk.", database + ".") });
+    if (!response.ok && queryErrors.length < 8) queryErrors.push({ status: response.status, detail: (await response.clone().text()).slice(0, 600) });
+    return response;
+  }
   return { ok: true, json: async () => ({ jobs: [], status: "success", data: { result: [] } }) };
 };
 const reader = createInvestigationReader(config, fetcher);
 const overview = createReader(config, fetcher);
-const report = { sourceCommit: execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim(), generatedAt: new Date().toISOString(), environment:{platform:platform(),cpus:cpus().length,memoryBytes:totalmem()}, scope: "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing", budgets:{requestP95Ms:2000,errors:0}, stages:[] };
+const report = { sourceCommit: execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim(), generatedAt: new Date().toISOString(), environment:{platform:platform(),cpus:cpus().length,memoryBytes:totalmem()}, scope: "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing", budgets:{requestP95Ms:2000,errors:0}, queryErrors, stages:[] };
 const percentile = (a,p) => [...a].sort((x,y)=>x-y)[Math.ceil(a.length*p)-1];
 const eventBase = Date.now() - 60000;
 let created = false;

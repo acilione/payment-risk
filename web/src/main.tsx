@@ -102,6 +102,11 @@ function App() {
       setLoading(false);
       return;
     }
+    if (tab === "Investigations") {
+      setLoading(false);
+      setError("");
+      return;
+    }
     let active = true;
     let controller: AbortController;
     const read = async () => {
@@ -144,7 +149,7 @@ function App() {
       controller?.abort();
       clearInterval(interval);
     };
-  }, [demo, window, refresh]);
+  }, [demo, window, refresh, tab]);
   useEffect(() => {
     if (selected) dialog.current?.showModal();
     else dialog.current?.close();
