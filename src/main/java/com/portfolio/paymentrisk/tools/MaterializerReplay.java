@@ -53,6 +53,8 @@ public final class MaterializerReplay {
             .put("reason", reason)
             .put("max_records", maxRecords)
             .put("records_per_second", rate)
+            .put("records", 0)
+            .put("rejected", 0)
             .put("status", "STARTED");
     Path audit = Path.of("artifacts", "replay-" + replayId + ".json");
     Files.createDirectories(audit.getParent());

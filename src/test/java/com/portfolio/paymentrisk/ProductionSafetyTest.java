@@ -186,4 +186,104 @@ class ProductionSafetyTest {
       server.stop(0);
     }
   }
+
+  @Test
+  void integrityProbeReportsPersistedIncidentsWithoutNewRecords() throws Exception {
+    var server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          byte[] body = "2\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    server.start();
+    try (var metrics = new MaterializerMetrics(0)) {
+      new ClickHouseWriter(
+              "http://localhost:" + server.getAddress().getPort(), "test", "not-a-secret", metrics)
+          .inspectIntegrity();
+      assertEquals(2, metrics.unresolved.get());
+      assertTrue(metrics.storageHealthy);
+      assertTrue(metrics.prometheus().contains("risk_materializer_unresolved_records 2.0"));
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void invalidPayloadIsOmittedFromDeadLettersByDefault() throws Exception {
+    var op =
+        new org.apache.flink.streaming.api.operators.ProcessOperator<
+            com.portfolio.paymentrisk.source.RawRecord, String>(
+            new com.portfolio.paymentrisk.processor.Validate(AppConfig.from(Map.of()), false));
+    try (var h =
+        new org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness<
+            com.portfolio.paymentrisk.source.RawRecord, String>(op)) {
+      h.open();
+      byte[] payload =
+          "synthetic-private-payment".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      var raw =
+          new com.portfolio.paymentrisk.source.RawRecord("payments.raw", 1, 42, 1000, payload);
+      raw.validationError = "DESERIALIZATION_ERROR";
+      h.processElement(new org.apache.flink.streaming.runtime.streamrecord.StreamRecord<>(raw));
+      var error =
+          Json.read(
+              h.getSideOutput(com.portfolio.paymentrisk.processor.Validate.DLQ)
+                  .element()
+                  .getValue());
+      assertEquals("", error.path("raw_payload").asText());
+      assertEquals(Audit.sha256(payload), error.path("payload_sha256").asText());
+      assertEquals(payload.length, error.path("payload_bytes").asInt());
+      assertEquals(42, error.path("source_offset").asLong());
+      assertEquals("omit", error.path("payload_mode").asText());
+      assertTrue(error.path("payload_truncated").asBoolean());
+    }
+  }
+
+  @Test
+  void exhaustedStorageRetriesNeverCommitKafkaOffsets() throws Exception {
+    AtomicInteger calls = new AtomicInteger();
+    var server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          calls.incrementAndGet();
+          exchange.sendResponseHeaders(503, -1);
+          exchange.close();
+        });
+    server.start();
+    try (var metrics = new MaterializerMetrics(0)) {
+      var writer =
+          new ClickHouseWriter(
+              "http://localhost:" + server.getAddress().getPort(),
+              "test",
+              "not-a-secret",
+              metrics,
+              2);
+      AtomicBoolean committed = new AtomicBoolean();
+      assertThrows(
+          java.io.IOException.class,
+          () -> DecisionMaterializer.persist(writer, "{}\n", "", () -> committed.set(true)));
+      assertFalse(committed.get());
+      assertEquals(2, calls.get());
+      assertEquals(1, metrics.retries.get());
+      assertFalse(metrics.storageHealthy);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void negativePolicyVersionIsRejectedBeforeClickHouseInsertion() {
+    var value = decision(2000).put("policy_version", -1);
+    value.put("evaluation_id", Audit.evaluationId("event", Audit.ENGINE_VERSION, "dynamic", -1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            MaterializerRows.convert(
+                value, new ConsumerRecord<>("decisions", 0, 0, null, new byte[0])));
+  }
 }

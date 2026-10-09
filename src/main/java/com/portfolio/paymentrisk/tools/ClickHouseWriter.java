@@ -38,13 +38,32 @@ public final class ClickHouseWriter {
   }
 
   public void insert(String table, String rows) throws IOException, InterruptedException {
-    if (!Set.of("risk.decisions", "risk.evaluations", "risk.materializer_rejections")
-        .contains(table)) throw new IllegalArgumentException("Unknown insertion target");
+    if (!Set.of("risk.evaluations", "risk.materializer_rejections").contains(table))
+      throw new IllegalArgumentException("Unknown insertion target");
     if (!rows.isEmpty()) execute("INSERT INTO " + table + " FORMAT JSONEachRow\n" + rows, true);
   }
 
-  public void ping() throws IOException, InterruptedException {
-    execute("SELECT 1", false);
+  // One bounded probe: persisted incidents remain visible after consumer restarts.
+  public void inspectIntegrity() throws IOException, InterruptedException {
+    var request =
+        HttpRequest.newBuilder(endpoint)
+            .timeout(Duration.ofSeconds(5))
+            .header("X-ClickHouse-User", user)
+            .header("X-ClickHouse-Key", password)
+            .POST(
+                HttpRequest.BodyPublishers.ofString(
+                    "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) SETTINGS max_execution_time=4 FORMAT TabSeparated"))
+            .build();
+    metrics.storageHealthy = false;
+    var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+    if (response.statusCode() / 100 != 2)
+      throw new IOException("ClickHouse integrity probe failed HTTP " + response.statusCode());
+    try {
+      metrics.unresolved.set(Long.parseLong(response.body().trim()));
+    } catch (NumberFormatException e) {
+      throw new IOException("Invalid ClickHouse integrity probe response");
+    }
+    metrics.storageHealthy = true;
   }
 
   private void execute(String body, boolean insert) throws IOException, InterruptedException {

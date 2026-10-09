@@ -16,6 +16,7 @@ public final class MaterializerMetrics implements AutoCloseable {
       lastPoll = new AtomicLong(),
       lastInsert = new AtomicLong(),
       lag = new AtomicLong();
+  public final AtomicLong unresolved = new AtomicLong(-1);
   public volatile boolean storageHealthy;
   private final HttpServer server;
 
@@ -34,7 +35,11 @@ public final class MaterializerMetrics implements AutoCloseable {
         "/health/ready",
         e -> {
           e.sendResponseHeaders(
-              storageHealthy && System.currentTimeMillis() - lastPoll.get() < 60_000 ? 200 : 503,
+              storageHealthy
+                      && unresolved.get() == 0
+                      && System.currentTimeMillis() - lastPoll.get() < 60_000
+                  ? 200
+                  : 503,
               -1);
           e.close();
         });
@@ -42,7 +47,8 @@ public final class MaterializerMetrics implements AutoCloseable {
   }
 
   public String prometheus() {
-    return metric("risk_materializer_committed_records_total", "counter", committed.get())
+    return metric("risk_materializer_unresolved_records", "gauge", unresolved.get())
+        + metric("risk_materializer_committed_records_total", "counter", committed.get())
         + metric("risk_materializer_rejected_records_total", "counter", rejected.get())
         + metric("risk_materializer_insert_retries_total", "counter", retries.get())
         + metric("risk_materializer_insert_errors_total", "counter", insertErrors.get())

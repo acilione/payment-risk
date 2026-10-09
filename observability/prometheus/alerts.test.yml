@@ -13,3 +13,13 @@ tests:
             exp_annotations:
               summary: Flink metrics endpoint is unavailable
               runbook: README.md#operations
+  - interval: 1m
+    input_series:
+      - series: 'risk_materializer_unresolved_records{job="materializer"}'
+        values: '0 2 2'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: MaterializerIntegrityConflict
+        exp_alerts:
+          - exp_labels: {job: materializer, severity: critical}
+            exp_annotations: {summary: Stored decisions contain unresolved conflicts or quarantined records}

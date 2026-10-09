@@ -42,3 +42,7 @@ groups:
         expr: sum(increase(flink_taskmanager_job_task_operator_risk_pending_overdue_observations_total[5m])) > 0
         labels: {severity: warning}
         annotations: {summary: Payment evaluations are waiting for event-time progress}
+      - alert: MaterializerIntegrityConflict
+        expr: risk_materializer_unresolved_records > 0
+        labels: {severity: critical}
+        annotations: {summary: Stored decisions contain unresolved conflicts or quarantined records}

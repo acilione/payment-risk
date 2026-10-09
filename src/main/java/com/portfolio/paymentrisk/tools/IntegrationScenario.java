@@ -108,7 +108,16 @@ public final class IntegrationScenario {
               && record.path("source_topic").asText().equals(c.topic("payments.raw"))
               && record.path("source_partition").asInt() == 0
               && record.path("source_offset").asLong() == malformedOffset
-              && record.path("raw_payload").asText().equals("Yw==")) dlq = true;
+              && record.path("payload_mode").asText().equals(c.dlqPayloadMode())
+              && record
+                  .path("payload_sha256")
+                  .asText()
+                  .equals(com.portfolio.paymentrisk.domain.Audit.sha256(new byte[] {99}))
+              && record.path("payload_bytes").asLong() == 1
+              && record
+                  .path("raw_payload")
+                  .asText()
+                  .equals(c.dlqPayloadMode().equals("capture") ? "Yw==" : "")) dlq = true;
           if (r.topic().equals(c.topic("payments.late"))
               && record.path("customer_id").asText().equals(run)) late = true;
         }

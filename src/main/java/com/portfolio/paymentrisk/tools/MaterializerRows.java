@@ -35,7 +35,11 @@ public final class MaterializerRows {
         || decision.path("risk_score").asInt() > 100
         || !List.of("APPROVE", "REVIEW", "REJECT").contains(decision.path("decision").asText())
         || !decision.path("currency").asText().equals("EUR")
-        || decision.path("amount_minor").asLong() < 1)
+        || decision.path("amount_minor").asLong() < 1
+        || decision.path("amount_minor").asLong() > 1_000_000_000_000L
+        || decision.path("policy_version").asLong() < 0
+        || decision.path("event_time").asLong() <= 0
+        || decision.path("processed_at").asLong() <= 0)
       throw new IllegalArgumentException("INVALID_DECISION");
     String id = decision.path("evaluation_id").asText();
     if (id.isEmpty()) id = Audit.legacyEvaluationId(decision);

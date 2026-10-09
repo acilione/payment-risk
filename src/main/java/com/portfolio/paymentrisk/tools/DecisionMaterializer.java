@@ -27,6 +27,7 @@ public final class DecisionMaterializer {
     p.put("auto.offset.reset", c.environment().equals("local") ? "earliest" : "none");
     p.put("max.poll.records", "500");
     p.put("max.poll.interval.ms", "300000");
+    p.put("default.api.timeout.ms", "30000");
     var codec = new AvroCodec(c.registry());
     String endpoint = System.getenv().getOrDefault("CLICKHOUSE_URL", "http://localhost:28123");
     if (!c.environment().equals("local") && !endpoint.startsWith("https://"))
@@ -48,13 +49,11 @@ public final class DecisionMaterializer {
       while (!Thread.currentThread().isInterrupted()) {
         var records = consumer.poll(Duration.ofSeconds(1));
         metrics.lastPoll.set(System.currentTimeMillis());
-        if (records.isEmpty()) {
-          if (System.currentTimeMillis() - lastProbe > 15000) {
-            writer.ping();
-            lastProbe = System.currentTimeMillis();
-          }
-          continue;
+        if (System.currentTimeMillis() - lastProbe > 15000) {
+          writer.inspectIntegrity();
+          lastProbe = System.currentTimeMillis();
         }
+        if (records.isEmpty()) continue;
         var evaluations = new StringBuilder();
         var rejections = new StringBuilder();
         long rejected = 0;
