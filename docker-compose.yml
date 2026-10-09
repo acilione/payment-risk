@@ -212,6 +212,15 @@ services:
     depends_on:
       bootstrap: {condition: service_completed_successfully}
       clickhouse: {condition: service_healthy}
+  payment-archiver:
+    logging: *logging
+    image: payment-risk:0.1.0
+    environment: *app-env
+    entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.PaymentArchiver]
+    restart: unless-stopped
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+      clickhouse: {condition: service_healthy}
   prometheus:
     logging: *logging
     image: prom/prometheus:v3.14.0

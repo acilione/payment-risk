@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.portfolio.paymentrisk.*;
 import com.portfolio.paymentrisk.config.AppConfig;
 import com.portfolio.paymentrisk.serialization.AvroCodec;
+import com.portfolio.paymentrisk.storage.*;
 import java.nio.file.*;
 import java.time.Duration;
 import java.util.*;
@@ -36,8 +37,8 @@ public final class MaterializerReplay {
         || rate > 5000)
       throw new IllegalArgumentException("Replay requires bounded limits and an execution reason");
     var c = AppConfig.fromEnv();
-    var p = c.kafkaProperties();
     String replayId = UUID.randomUUID().toString();
+    var p = KafkaIngestion.properties(c, "risk-replay-" + replayId, false);
     p.put("bootstrap.servers", c.bootstrap());
     p.put("group.id", "risk-replay-" + replayId);
     p.put("enable.auto.commit", "false");
@@ -93,7 +94,8 @@ public final class MaterializerReplay {
                   metrics)
               : null;
       long records = 0, rejected = 0;
-      var positions = new TreeSet<String>();
+      var positions = new SourcePositionDigest();
+      report.put("source_positions_digest_format", "partition-offsets-v2");
       long deadline = System.nanoTime() + Duration.ofMinutes(10).toNanos();
       while (true) {
         boolean complete = true;
@@ -105,42 +107,42 @@ public final class MaterializerReplay {
         if (System.nanoTime() > deadline) throw new IllegalStateException("Replay timed out");
         long started = System.nanoTime();
         var batch = consumer.poll(Duration.ofMillis(500));
-        var rows = new StringBuilder();
-        var failures = new StringBuilder();
+        var writes =
+            execute
+                ? new DurableKafkaBatch(
+                    writer, ignored -> {}, metrics, DurableKafkaBatch.DEFAULT_BYTES)
+                : null;
         long batchSize = 0;
         for (var record : batch) {
           if (record.offset() >= ends.get(new TopicPartition(record.topic(), record.partition())))
             continue;
           if (System.nanoTime() > deadline) throw new IllegalStateException("Replay timed out");
-          positions.add(record.topic() + ":" + record.partition() + ":" + record.offset());
+          positions.add(record.topic(), record.partition(), record.offset());
           if (++records > maxRecords)
             throw new IllegalStateException(
                 "Replay record limit exceeded; partial writes may exist");
           batchSize++;
+          String table, row;
           try {
-            rows.append(
-                    Json.write(
-                        MaterializerRows.convert(
-                            (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision")),
-                            record)))
-                .append('\n');
+            var converted =
+                MaterializerRows.convert(
+                    (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision")), record);
+            table = "risk.evaluations";
+            row = execute ? Json.write(converted) : "";
           } catch (IllegalArgumentException | org.apache.avro.AvroRuntimeException e) {
-            failures
-                .append(Json.write(MaterializerRows.rejection(record, "INVALID_DECISION")))
-                .append('\n');
+            table = "risk.materializer_rejections";
+            row = execute ? Json.write(MaterializerRows.rejection(record, "INVALID_DECISION")) : "";
             rejected++;
           }
+          if (execute) writes.add(table, row, record);
         }
-        if (execute)
-          DecisionMaterializer.persist(writer, rows.toString(), failures.toString(), () -> {});
+        if (execute) writes.flush();
         long wait = batchSize * 1000 / rate - (System.nanoTime() - started) / 1000000;
         if (wait > 0) Thread.sleep(wait);
         report.put("records", records).put("rejected", rejected);
         Files.writeString(audit, Json.write(report));
       }
-      report.put(
-          "source_positions_sha256",
-          com.portfolio.paymentrisk.domain.Audit.sha256(String.join("\n", positions)));
+      report.put("source_positions_sha256", positions.finish());
       report.put("status", "COMPLETE");
     } catch (Exception e) {
       report.put("status", "FAILED").put("failure_type", e.getClass().getSimpleName());

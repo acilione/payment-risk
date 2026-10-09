@@ -23,3 +23,13 @@ tests:
         exp_alerts:
           - exp_labels: {job: materializer, severity: critical}
             exp_annotations: {summary: Stored decisions contain unresolved conflicts or quarantined records}
+  - interval: 1m
+    input_series:
+      - series: 'up{job="payment-archiver",instance="payment-archiver:9406"}'
+        values: '0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PaymentArchiveUnavailable
+        exp_alerts:
+          - exp_labels: {job: payment-archiver, instance: 'payment-archiver:9406', severity: critical}
+            exp_annotations: {summary: Payment input archival is unavailable; preserve the Kafka log}

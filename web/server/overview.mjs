@@ -20,7 +20,9 @@ export function createReader(
         "X-ClickHouse-Key": password,
         "Content-Type": "text/plain",
       },
-      body: query + " SETTINGS readonly=1, max_execution_time=4 FORMAT JSON",
+      body:
+        query +
+        " SETTINGS readonly=1, max_execution_time=4, max_memory_usage=268435456, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864 FORMAT JSON",
     });
     return result.data;
   }
@@ -32,7 +34,7 @@ export function createReader(
     const [totals, series, rules, decisions, cluster, metrics, integrity] =
       await Promise.allSettled([
         sql(
-          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileExact(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_current WHERE ${where}`,
+          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_current WHERE ${where}`,
         ),
         sql(
           `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_current WHERE ${where} GROUP BY time ORDER BY time`,

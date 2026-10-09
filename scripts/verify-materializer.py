@@ -39,9 +39,14 @@ def replay(execute):
     assert report['status'] == 'COMPLETE' and report['records'] > 0 and report['rejected'] == 0, report
     conditions = ' OR '.join(f"(source_topic='{r['topic']}' AND source_partition={r['partition']} AND source_offset>={r['start']} AND source_offset<{r['end_exclusive']})" for r in report['ranges'])
     actual = rows('SELECT DISTINCT source_topic,source_partition,source_offset FROM risk.evaluations WHERE ' + conditions)
-    coordinates = sorted(f"{r['source_topic']}:{r['source_partition']}:{r['source_offset']}" for r in actual)
-    assert len(coordinates) == report['records'], (len(coordinates), report)
-    assert hashlib.sha256('\n'.join(coordinates).encode()).hexdigest() == report['source_positions_sha256'], report
+    assert len(actual) == report['records'], (len(actual), report)
+    hashes = {}
+    for row in sorted(actual, key=lambda r: (r['source_topic'], int(r['source_partition']), int(r['source_offset']))):
+        key = f"{row['source_topic']}:{row['source_partition']}"
+        hashes.setdefault(key, hashlib.sha256()).update((str(row['source_offset']) + '\n').encode())
+    digest_input = json.dumps({key: value.hexdigest() for key, value in sorted(hashes.items())}, separators=(',', ':'))
+    assert report['source_positions_digest_format'] == 'partition-offsets-v2'
+    assert hashlib.sha256(digest_input.encode()).hexdigest() == report['source_positions_sha256'], report
     return report
 
 

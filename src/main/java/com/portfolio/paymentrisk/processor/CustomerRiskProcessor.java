@@ -188,7 +188,7 @@ public class CustomerRiskProcessor
       if (count(pendingCount) > 0) {
         long oldest = ctx.timerService().currentProcessingTime();
         for (String value : pending.values())
-          for (var item : rows(value))
+          for (var item : StateHistory.rows(value))
             oldest = Math.min(oldest, item.path("queued_at").asLong(pendingSince.value()));
         pendingSince.update(oldest);
         if (ctx.timerService().currentProcessingTime() - oldest >= config.pendingAlertMs()) {
@@ -213,7 +213,7 @@ public class CustomerRiskProcessor
     for (var e : history.entries())
       if (e.getKey() <= t - config.historyMs()) {
         expired.add(e.getKey());
-        removed += rows(e.getValue()).size();
+        for (var ignored : StateHistory.rows(e.getValue())) removed++;
       }
     for (long k : expired) history.remove(k);
     setCount(historyCount, count(historyCount) - removed);
@@ -230,17 +230,15 @@ public class CustomerRiskProcessor
       return;
     }
     bucket.sort(Comparator.comparing(n -> n.path("transaction").path("event_id").asText()));
-    var recent = new ArrayList<JsonNode>();
-    for (String value : history.values()) recent.addAll(rows(value));
-    var known = new HashMap<String, Long>();
-    for (var e : devices.entries()) known.put(e.getKey(), e.getValue());
     var current = rows(history.get(t));
+    var recent = StateHistory.read(history, t, current);
     for (var item : bucket) {
       if (count(historyCount) >= config.maxEvents())
         throw new IllegalStateException("Customer history state limit exceeded");
       var tx = item.path("transaction");
       String device = tx.path("device_id").asText();
-      if (!known.containsKey(device) && count(deviceCount) >= config.maxDevices())
+      Long lastSeen = devices.get(device);
+      if (lastSeen == null && count(deviceCount) >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
       var rules = new ArrayList<JsonNode>();
       item.path("rules").forEach(rules::add);
@@ -249,7 +247,7 @@ public class CustomerRiskProcessor
           RiskEngine.evaluate(
               tx,
               recent,
-              known,
+              lastSeen,
               rules,
               item.path("review_threshold").asInt(config.review()),
               item.path("reject_threshold").asInt(config.reject()),
@@ -271,11 +269,9 @@ public class CustomerRiskProcessor
               .put("currency", tx.path("currency").asText())
               .put("device_id", device)
               .put("status", tx.path("status").asText());
-      recent.add(feature);
       current.add(feature);
       historyCount.update(count(historyCount) + 1);
-      if (!known.containsKey(device)) deviceCount.update(count(deviceCount) + 1);
-      known.put(device, t);
+      if (lastSeen == null) deviceCount.update(count(deviceCount) + 1);
       devices.put(device, t);
     }
     history.put(t, Json.write(current));

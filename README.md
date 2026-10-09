@@ -1,6 +1,6 @@
 # Payment risk
 
-A Java application that evaluates payment events with Apache Flink. Kafka carries the payments and rule updates; Flink checks each customer's recent activity and writes an `APPROVE`, `REVIEW`, or `REJECT` decision. A separate consumer stores those decisions in ClickHouse, and a React dashboard displays the results.
+A Java application that evaluates payment events with Apache Flink. Kafka carries the payments and rule updates; Flink checks each customer's recent activity and writes an `APPROVE`, `REVIEW`, or `REJECT` decision. Independent consumers archive the original payment bytes and store decisions in ClickHouse. A React dashboard displays the results.
 
 The included producer generates synthetic EUR payments. The application calculates risk scores; it does not authorize payments or move money. [View the dashboard demo](https://acilione.github.io/payment-risk/).
 
@@ -47,6 +47,8 @@ Compose builds the MinIO server and client from pinned upstream source commits u
 ```mermaid
 flowchart LR
   P[Payment producer] --> K[(Kafka payments.raw)]
+  K --> I[Independent input archiver]
+  I --> C[(ClickHouse)]
   K --> V[Decode and validate]
   V --> D[Deduplicate by event_id]
   D --> T[Check transaction_id identity]
@@ -129,17 +131,19 @@ The rule stream marks itself idle because rule updates cannot define payment tim
 
 ### Five risk rules and decision scoring
 
-[RiskEngine.java](src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java) is a pure calculation: it receives the current payment, previously evaluated customer history, device last-seen timestamps, and the payment's rule snapshot. It does not perform network calls. [Rules.java](src/main/java/com/portfolio/paymentrisk/domain/Rules.java) defines the defaults and validates updates.
+[RiskEngine.java](src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java) is a pure calculation: it receives the current payment, an iterable of previously evaluated customer history, the current device's last-seen timestamp, and the payment's rule snapshot. It does not perform network calls. [Rules.java](src/main/java/com/portfolio/paymentrisk/domain/Rules.java) defines the defaults and validates updates.
 
 For an event at time `t`, each rule uses the interval `(t - window, t]`. The lower boundary is excluded. Payments already evaluated at the same timestamp are part of the preceding history because the processor orders them by event ID.
 
 | Rule | Implementation | Default condition | Points |
 |---|---|---|---:|
-| R001: payment frequency | Filter retained history to the rule window, then add one for the current payment. | More than 5 payments in 2 minutes. | 25 |
+| R001: payment frequency | Count historical entries inside the rule window and add the current payment. | More than 5 payments in 2 minutes. | 25 |
 | R002: total payment amount | Sum amounts from the current payment and same-currency history using integer cents and `Math.addExact`. | More than EUR 3,000 in 10 minutes. | 35 |
 | R003: multiple devices | Build a `HashSet` of device IDs in the window and add the current device. | At least 3 devices in 15 minutes. | 20 |
 | R004: new device and high amount | Look up the current device's last evaluated timestamp before updating device state. An absent timestamp, or one at or before the window boundary, counts as unseen. | Device not seen within 30 days and amount at least EUR 800. | 30 |
 | R005: approval after declines | Check that the current input status is `APPROVED`, then count preceding `DECLINED` payments in the window. Declines need not be consecutive. | At least 4 declines in the previous 10 minutes. | 40 |
+
+[RiskFeatures.java](src/main/java/com/portfolio/paymentrisk/domain/RiskFeatures.java) computes all five observations in one pass. [StateHistory.java](src/main/java/com/portfolio/paymentrisk/processor/StateHistory.java) iterates persisted JSON rows lazily; the operator no longer assembles a list of all customer history or a map of all devices. It looks up only the current device directly in managed state. Distinct devices in the applicable window still require a set. State names, serializers and evaluation semantics remain compatible with the existing savepoints.
 
 Matching rule weights are added and capped at 100. The default result is `APPROVE` below 30, `REVIEW` from 30 to 69, and `REJECT` from 70 upward. For example, a new-device payment of EUR 900 scores 30 and receives `REVIEW` if no other rule matches. If all five rules match, their 150 points are capped at 100 and the result is `REJECT`.
 
@@ -185,14 +189,17 @@ This coordinates Kafka source positions, Flink state, and Kafka output across re
 
 ### ClickHouse storage, uniqueness and retries
 
-[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 500 records per poll with `read_committed` and auto-commit disabled. Valid decisions go to `risk.evaluations`; malformed decisions go to `risk.materializer_rejections`, which contains source coordinates, error category, payload fingerprint and length, but no raw payload. Registry connection and authentication errors stop processing rather than classifying records as invalid.
+[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 250 records per poll with `read_committed` and auto-commit disabled. Valid decisions go to `risk.evaluations`; malformed decisions go to `risk.materializer_rejections`, which contains source coordinates, error category, payload fingerprint and length, but no raw payload. Registry connection and authentication errors stop processing rather than classifying records as invalid.
 
-The consumer commits Kafka offsets only after both synchronous inserts succeed. HTTP requests disable asynchronous inserts and wait for query completion. Network errors, HTTP 429 and server errors receive up to five attempts with exponential backoff and jitter; other HTTP errors stop immediately. Exhaustion leaves offsets uncommitted, and Compose restarts the consumer. Decode work has a 60-second budget, each HTTP request has a 10-second timeout, and the combined retry budget fits below the explicitly configured five-minute poll interval. An outage longer than Kafka retention can still lose recoverable input.
+[DurableKafkaBatch.java](src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java) limits insert buffers to 1 MiB of UTF-8 JSON across tables. Each completed chunk commits an explicit map of the source offsets it contains, after every insert for that chunk succeeds; it never commits the unprocessed remainder of a poll. A single row larger than the limit is written alone without truncation. Kafka fetch targets are 4 MiB per broker request and 1 MiB per partition; Kafka can return an oversized first record batch for progress, so these are not hard JVM heap limits. Broker/producer message limits must also match available memory.
+
+The consumer commits Kafka offsets only after the chunk's synchronous inserts succeed. HTTP requests disable asynchronous inserts and wait for query completion. Network errors, HTTP 429 and server errors receive up to five attempts with exponential backoff and jitter; other HTTP errors stop immediately. Exhaustion leaves the failed chunk uncommitted, and Compose restarts the consumer. Previously committed chunks remain complete. Decode and batch work has a 60-second budget, each HTTP request has a 10-second timeout, and the combined retry budget fits below the explicitly configured five-minute poll interval. An outage longer than Kafka retention can still lose recoverable input.
 
 A successful insert followed by a lost response or failed offset commit can produce another physical delivery. [clickhouse.sql](infrastructure/docker/clickhouse.sql) makes this explicit:
 
 | Table or view | Purpose |
 | --- | --- |
+| `payment_ingress` | Original committed Kafka payment records, before validation, deduplication or evaluation; includes exact bytes and source metadata. |
 | `evaluations` | Append-only deliveries, with full audit data and Kafka provenance. Physical retry rows are expected. |
 | `evaluations_logical` | One row per `evaluation_id`, delivery count and exact number of distinct business results. Processing time and source offsets do not create a new result. |
 | `transaction_integrity` / `integrity_conflicts` | Identify conflicting results for an evaluation and multiple evaluations for one transaction. No arbitrary offset chooses a winner. |
@@ -206,13 +213,27 @@ The API returns 503 when any stored conflict or quarantined decision exists. It 
 
 This provides logical uniqueness for stored analytical results while retaining deliveries. It does **not** provide a database uniqueness constraint, unlimited producer deduplication, or an accounting ledger. If physical business-row uniqueness is required, use a separate transactional registry with unique event/evaluation keys and a transactional outbox, then derive ClickHouse analytics from it. The [production-plan review](docs/Payment_Risk_Piano_Tecnico_Produzione.md#12-seconda-analisi-critica-e-interventi-sul-branch) explains that alternative and the remaining guarantees.
 
+### Preserve input independently of classification
+
+[PaymentArchiver.java](src/main/java/com/portfolio/paymentrisk/tools/PaymentArchiver.java) consumes `payments.raw` with its own group, `risk-payment-archive-v1`, and writes `risk.payment_ingress`. It runs independently of Flink, decision materialization and schema decoding. Pending evaluations, late payments, conflicting identities, malformed Avro and null values can therefore be preserved even when classification cannot proceed. The archive uses `read_committed`: aborted producer transactions are intentionally excluded.
+
+[PaymentArchiveRows.java](src/main/java/com/portfolio/paymentrisk/storage/PaymentArchiveRows.java) preserves topic, partition, offset, Kafka timestamp/type, binary key, value and ordered headers, with a payload SHA-256. Binary fields use Base64, explicit null flags distinguish null from empty, and ClickHouse applies Zstandard compression. This is a wire archive, not a normalized payment ledger or a risk decision. Decoding later requires the writer schema, so registry metadata must be backed up too. Base64 is not encryption: unlike the redacted DLQ, this table contains the complete input and requires restricted access for real data.
+
+Archive inserts use the same bounded chunks, synchronous writes, retries and commit-after-persistence contract as decision ingestion. A lost response or crash before commit can create identical physical copies; source coordinates identify the original Kafka record. Do not count archive rows as unique payments or reset offsets by deleting/recreating source topics. The archive has no automatic TTL. Its metrics are exposed on port 9406 inside Compose, with availability and backlog alerts. Its liveness probe queries only `SELECT 1`, so a costly analytical integrity query does not block input capture.
+
+New payment topics disable automatic time and size retention (`retention.ms=-1`, `retention.bytes=-1`); decision/late/DLQ topics retain the seven-day default. This prevents a long database outage from aging an unarchived payment out of Kafka. It requires disk capacity management: a full disk must stop acceptance, not trigger deletion of unverified data. There is no automatic safe truncation implementation. A production retention policy needs verified database/archive coverage, the Flink recovery/replay horizon, replicated storage and backups before releasing source segments. Disabling retention is not an unlimited-storage design.
+
+Both database consumers use `auto.offset.reset=none` for existing offsets. A new local group can initialize at zero only when the retained log starts there; that initial position is committed before processing. A gap fails visibly instead of jumping forward. Outside local mode, provision offsets explicitly. A new deployment over an expired source log cannot reconstruct lost records and must not claim complete coverage.
+
+The guarantee begins with a record durably accepted by Kafka. A process restart or temporary database outage leaves it replayable and eventually persistable when storage recovers. The single-broker, single-database Compose setup does not survive every disk failure. Producer acknowledgment handling, replication, storage capacity and backups remain necessary before claiming a no-loss production service. Archival success also does not imply that every input already has a valid classification.
+
 ### Dashboard and read-only API
 
 [web/src/main.tsx](web/src/main.tsx) implements the React views for totals, decision trends, transaction inspection, rule descriptions, and architecture. TypeScript defines the API response types, Vite builds the frontend, and SVG/CSS render the charts. The rule screen displays packaged defaults; it is not an editor or a live view of broadcast state.
 
 [web/server/overview.mjs](web/server/overview.mjs) queries ClickHouse for totals, 30 time buckets, rule-match counts using `arrayJoin(matched_rules)`, and the latest 100 decisions. Time windows use `processed_at` and are limited to 15 minutes, one hour, or 24 hours. The browser filters the loaded decisions by decision type or a case-insensitive match on transaction ID, customer ID, and matched rule IDs. Search therefore covers the latest 100 loaded decisions, not the complete database.
 
-The API also reads Flink REST for the running job and latest checkpoint, and Prometheus for Kafka source lag. Kafka status is inferred from source metrics; it is not a direct broker probe. A checkpoint is marked current when it completed within three minutes. The reported finalization p95 is `processed_at - event_time`, which excludes the subsequent Kafka commit wait.
+The API also reads Flink REST for the running job and latest checkpoint, and Prometheus for Kafka source lag. Kafka status is inferred from source metrics; it is not a direct broker probe. A checkpoint is marked current when it completed within three minutes. The reported finalization p95 estimates `processed_at - event_time` using `quantileTDigest`, avoiding an exact quantile that retains every value. It excludes the subsequent Kafka commit wait. Only this operational percentile is approximate; amounts, counts and identity checks remain exact. API and integrity-probe queries have a 256 MiB memory limit and enable external aggregation/sorting after 64 MiB. A query that cannot complete returns an error rather than partial financial totals.
 
 [web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview?window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
 
@@ -255,7 +276,7 @@ The local API has no authentication. Hosting live payment data for other users r
 
 ## Data model
 
-Kafka carries five Avro record types: payments, rule updates, decisions, rejected records and late payments. Flink maintains the customer history needed to evaluate payments. ClickHouse stores decisions for queries and dashboards.
+Kafka carries five Avro record types: payments, rule updates, decisions, rejected records and late payments. Flink maintains the customer history needed to evaluate payments. ClickHouse stores original wire inputs independently from decisions for queries and dashboards.
 
 Customer, merchant and device IDs are references supplied by the payment producer. This project does not maintain separate customer, merchant or device tables.
 
@@ -404,6 +425,7 @@ Use Linux or WSL with Docker Compose, Python 3, Java 17 or later, Maven, and Mak
 make test
 make up
 make run-job
+make simulate-customers
 make integration-test
 make generate-load
 ```
@@ -522,7 +544,7 @@ Retained external checkpoints survive job cancellation. When no runtime checkpoi
 
 ### Materializer replay and migration
 
-`MaterializerReplay` reads only committed **decisions**. By default it performs a dry run. It captures each partition's start and last-stable end offset, assigns those partitions directly, never commits offsets or uses the live consumer group, limits execution to ten minutes and 100,000 records, and defaults to 500 records per second. `--execute --reason "..."` enables writes; `--max-records` (up to one million) and `--rate` (up to 5,000) control bounds. Each attempt writes a UUID-named JSON manifest under `artifacts/` and prints the final report, including offset ranges, record counts, status and source-coordinate digest. Preserve this directory outside ephemeral containers. A failed attempt may have partially inserted deliveries; the same range can be replayed without double counting.
+`MaterializerReplay` reads only committed **decisions**. By default it performs a dry run. It captures each partition's start and last-stable end offset, assigns those partitions directly, never commits offsets or uses the live consumer group, limits execution to ten minutes and 100,000 records, and defaults to 500 records per second. `--execute --reason "..."` enables writes; `--max-records` (up to one million) and `--rate` (up to 5,000) control bounds. Each attempt writes a UUID-named JSON manifest under `artifacts/` and prints the final report, including offset ranges, record counts, status and source-coordinate digest. Digest format `partition-offsets-v2` hashes increasing offset lines within each partition, then hashes a sorted map of the partition hashes. Memory grows with partition count rather than the total number of replayed records; this format is not comparable to older manifests. Preserve this directory outside ephemeral containers. A failed attempt may have partially inserted deliveries; the same range can be replayed without double counting.
 
 ```bash
 # With the application's Kafka, registry and ClickHouse environment configured:
@@ -534,6 +556,16 @@ python3 scripts/verify-materializer.py
 ```
 
 For an existing deployment, back up ClickHouse and capture consumer offsets first. Stop the old materializer and the website, apply [clickhouse.sql](infrastructure/docker/clickhouse.sql) explicitly (initialization scripts do not rerun on existing volumes), then backfill `evaluations` from retained committed decisions. The new local group is `risk-clickhouse-evaluations-v2`; staging/production require explicitly initialized committed offsets. Reconcile before reopening the website. Compare old transaction coverage as well as source positions: decisions already expired from Kafka need a retained archive. The old replacing table may already have discarded conflicting versions, so it cannot recreate a complete audit trail. If coverage is incomplete, stop the migration instead of declaring it successful.
+
+For the input archive upgrade, apply the updated SQL before starting `payment-archiver`; its table is not created automatically on an existing ClickHouse volume. Bootstrap intentionally does not alter existing Kafka topics. For the default local topic, disable its old expiry explicitly:
+
+```bash
+docker compose exec -T kafka /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:9092 \
+  --entity-type topics --entity-name payments.raw --alter \
+  --add-config retention.ms=-1,retention.bytes=-1
+```
+
+Inspect retained beginning offsets and archive coverage before starting a new archive group. This change cannot restore already deleted records. Keep the original Kafka log and database backups while evaluating retention.
 
 Rollback requires the captured database/view state and consumer offsets, plus compatible Flink state and reader schemas. Do not simply redeploy the old materializer against the new view. New Avro fields have defaults, and existing operator UIDs remain stable, but old deduplication fingerprints and watchdog timestamps do not exist in earlier savepoints; their limits are documented above. Older pending rows also lack explicit classification thresholds and use the deployment configuration on restore: retain the old review/reject thresholds until those rows have drained, or migrate the pending state explicitly.
 
@@ -657,7 +689,7 @@ The tagged release workflow builds and scans an application image, runs integrat
 
 ## Performance
 
-Rule evaluation scans the retained history for each customer's configured windows. Its cost grows with the number of retained payments, and events sharing a timestamp require rewriting their JSON bucket. One heavily used customer remains on one processing task regardless of total parallelism. The load generator also waits for each Kafka acknowledgment, so its configured rate is a request rather than proof of pipeline capacity.
+Rule evaluation reads retained history once per payment and accumulates all rule observations without building per-rule lists. It still scans the retained history for each customer's configured windows. Its cost grows with the number of retained payments, and events sharing a timestamp require rewriting their JSON bucket. One heavily used customer remains on one processing task regardless of total parallelism. The load generator also waits for each Kafka acknowledgment, so its configured rate is a request rather than proof of pipeline capacity.
 
 A recorded local run on 2026-09-09 used 1,000 events at a requested 100 events/second, three payment partitions, Flink parallelism 2, a ten-second watermark allowance, and ten-second checkpoints. It ran on WSL2 with 20 logical CPUs and 15.46 GiB guest memory, alongside other development services.
 
@@ -672,3 +704,17 @@ A recorded local run on 2026-09-09 used 1,000 events at a requested 100 events/s
 These are separate measurements. The evaluation histogram covers the rule calculation, while visible output also waits for event ordering and checkpoint-driven Kafka commits. The short run does not establish sustained capacity or long-term state size.
 
 Run `make benchmark`, or `python3 scripts/benchmark.py --count 1000 --rate 100`, to record another measurement in `artifacts/benchmark.json`. Compare exact acknowledged and committed IDs, duplicates, lag, latency, state size, and checkpoint duration while keeping every input partition advancing. Test steady traffic, bursts, heavily used customers, many distinct customers, duplicates, and out-of-order events separately.
+
+### Code responsibilities and remaining scaling limits
+
+`PaymentRiskJob` assembles transport and operators. `CustomerRiskProcessor` owns managed state, event-time ordering, policy snapshots and timers; `StateHistory` adapts persisted rows to an iterator. `RiskFeatures` computes observations and `RiskEngine` assigns scores and evidence without storage calls. `PaymentArchiver` preserves inputs; `DecisionMaterializer` validates and stores outputs. `KafkaIngestion` centralizes consumer limits and connection configuration; `DurableKafkaBatch` defines the write/commit boundary; `ClickHouseWriter` handles HTTP and retries. Scenario tools exercise these components without becoming runtime dependencies of the domain calculations.
+
+This is a clearer separation, not a claim of an optimal design for every workload. One customer's same-timestamp bucket is still decoded and sorted in memory, and updating it rewrites its JSON. History scans still cost O(retained customer events) per payment. The exact ClickHouse uniqueness/integrity views still aggregate historical deliveries and can become a query bottleneck; memory limits and spilling prevent uncontrolled query allocation but do not remove that work. A larger deployment needs measurements of key skew, state size, query cost, backlog and recovery before choosing incremental feature state or a separately maintained integrity projection. Those changes require state/data migrations and cannot safely be replaced by approximate deduplication.
+
+The tests include a generated 100,000-row history consumed exactly once, byte-bounded multi-partition commits, failed second-table inserts, binary/null preservation and new-group retention-gap rejection. CI also stops Flink, takes ClickHouse down, publishes synthetic inputs and checks that archive offsets do not advance; it then restores ClickHouse while the registry remains stopped and verifies the exact stored bytes, including invalid and late inputs. Run `make stop-job` followed by `python3 scripts/verify-ingress.py` only on the local synthetic stack; the script temporarily stops ClickHouse and the registry. This fault test is not a throughput benchmark.
+
+### Can Flink run an AI classifier?
+
+Yes. Flink 2.2 supports model inference through SQL `ML_PREDICT` and Table API, including asynchronous execution; the existing DataStream job can also call a model service through bounded [Async I/O](https://nightlies.apache.org/flink/flink-docs-release-2.2/docs/dev/datastream/operators/asyncio/). These are model-integration mechanisms, not pretrained fraud detection. See the [2.2 model inference documentation](https://nightlies.apache.org/flink/flink-docs-release-2.2/docs/dev/table/sql/queries/model-inference/).
+
+For these structured payments, the useful next experiment would be a supervised tabular classifier on the same observable features, evaluated beside the rules. It would need independently labeled histories, separate training/evaluation periods, model and feature-schema versions, recorded scores, threshold calibration, drift checks and explicit handling of timeouts/unavailable predictions. The nine authored scenarios are regression tests, not a training population. A model must not delay input archival, and failure to predict must never become an implicit approval. The branch does not add an untrained classifier or an external AI service. Existing rule evidence provides a baseline for a future comparison.

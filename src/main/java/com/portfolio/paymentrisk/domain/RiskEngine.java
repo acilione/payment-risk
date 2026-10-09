@@ -17,6 +17,24 @@ public final class RiskEngine {
       int review,
       int reject,
       long processedAt) {
+    return evaluate(
+        tx,
+        history,
+        devices.get(tx.path("device_id").asText()),
+        rules,
+        review,
+        reject,
+        processedAt);
+  }
+
+  public static ObjectNode evaluate(
+      JsonNode tx,
+      Iterable<JsonNode> history,
+      Long deviceLastSeen,
+      List<JsonNode> rules,
+      int review,
+      int reject,
+      long processedAt) {
     var matched = new ArrayList<String>();
     var reasons = new ArrayList<String>();
     var evidence = Json.MAPPER.createArrayNode();
@@ -24,52 +42,13 @@ public final class RiskEngine {
     long time = tx.path("event_time").asLong();
     var ordered =
         rules.stream().sorted(Comparator.comparing(r -> r.path("rule_id").asText())).toList();
+    var observations = RiskFeatures.observe(tx, history, deviceLastSeen, ordered);
     for (var r : ordered) {
-      long boundary = time - r.path("window_seconds").asLong() * 1000;
       long threshold = r.path("threshold").asLong();
-      var recent =
-          history.stream()
-              .filter(
-                  h ->
-                      h.path("event_time").asLong() > boundary
-                          && h.path("event_time").asLong() <= time)
-              .toList();
-      boolean enabled = r.path("enabled").asBoolean(), eligible = true, hit;
-      long observed;
-      switch (Rules.Type.valueOf(r.path("type").asText())) {
-        case TX_COUNT_VELOCITY -> {
-          observed = recent.size() + 1;
-          hit = observed > threshold;
-        }
-        case AMOUNT_VELOCITY -> {
-          observed = tx.path("amount_minor").asLong();
-          for (var h : recent)
-            if (h.path("currency").asText().equals(tx.path("currency").asText()))
-              observed = Math.addExact(observed, h.path("amount_minor").asLong());
-          eligible = tx.path("currency").asText().equals(r.path("currency").asText());
-          hit = observed > threshold;
-        }
-        case UNIQUE_DEVICES -> {
-          var unique = new HashSet<String>();
-          recent.forEach(h -> unique.add(h.path("device_id").asText()));
-          unique.add(tx.path("device_id").asText());
-          observed = unique.size();
-          hit = observed >= threshold;
-        }
-        case NEW_DEVICE_HIGH_AMOUNT -> {
-          observed = tx.path("amount_minor").asLong();
-          eligible =
-              devices.getOrDefault(tx.path("device_id").asText(), Long.MIN_VALUE) <= boundary;
-          hit = observed >= threshold;
-        }
-        case DECLINE_THEN_APPROVAL -> {
-          observed =
-              recent.stream().filter(h -> h.path("status").asText().equals("DECLINED")).count();
-          eligible = tx.path("status").asText().equals("APPROVED");
-          hit = observed >= threshold;
-        }
-        default -> throw new IllegalArgumentException("Unsupported rule");
-      }
+      var observation = observations.get(r.path("rule_id").asText());
+      boolean enabled = r.path("enabled").asBoolean();
+      boolean eligible = observation.eligible(), hit = observation.matched();
+      long observed = observation.value();
       hit = hit && eligible && enabled;
       int contribution = hit ? r.path("score").asInt() : 0;
       evidence.add(

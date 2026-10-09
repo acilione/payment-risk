@@ -70,7 +70,7 @@ test("invalid source telemetry is unavailable; analytics normalize ClickHouse nu
       else {
         assert.match(
           options.body,
-          /SETTINGS readonly=1, max_execution_time=4 FORMAT JSON$/,
+          /SETTINGS readonly=1, max_execution_time=4, max_memory_usage=268435456, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864 FORMAT JSON$/,
         );
         assert.equal(options.headers["X-ClickHouse-Key"], "test-only");
         body = {

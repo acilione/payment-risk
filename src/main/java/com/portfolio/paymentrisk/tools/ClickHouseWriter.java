@@ -38,9 +38,13 @@ public final class ClickHouseWriter {
   }
 
   public void insert(String table, String rows) throws IOException, InterruptedException {
-    if (!Set.of("risk.evaluations", "risk.materializer_rejections").contains(table))
-      throw new IllegalArgumentException("Unknown insertion target");
+    if (!Set.of("risk.evaluations", "risk.materializer_rejections", "risk.payment_ingress")
+        .contains(table)) throw new IllegalArgumentException("Unknown insertion target");
     if (!rows.isEmpty()) execute("INSERT INTO " + table + " FORMAT JSONEachRow\n" + rows, true);
+  }
+
+  public void ping() throws IOException, InterruptedException {
+    execute("SELECT 1", false);
   }
 
   // One bounded probe: persisted incidents remain visible after consumer restarts.
@@ -52,7 +56,7 @@ public final class ClickHouseWriter {
             .header("X-ClickHouse-Key", password)
             .POST(
                 HttpRequest.BodyPublishers.ofString(
-                    "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) SETTINGS max_execution_time=4 FORMAT TabSeparated"))
+                    "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) SETTINGS max_execution_time=4, max_memory_usage=268435456, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864 FORMAT TabSeparated"))
             .build();
     metrics.storageHealthy = false;
     var response = http.send(request, HttpResponse.BodyHandlers.ofString());

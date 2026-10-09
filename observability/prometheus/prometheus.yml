@@ -8,3 +8,6 @@ scrape_configs:
   - job_name: materializer
     static_configs:
       - targets: ['materializer:9405']
+  - job_name: payment-archiver
+    static_configs:
+      - targets: ['payment-archiver:9406']

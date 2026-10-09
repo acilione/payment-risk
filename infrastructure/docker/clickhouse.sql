@@ -58,3 +58,13 @@ CREATE TABLE IF NOT EXISTS risk.materializer_rejections (
   source_timestamp Int64, error_code LowCardinality(String), payload_sha256 String,
   payload_bytes UInt64, observed_at Int64
 ) ENGINE = ReplacingMergeTree(observed_at) ORDER BY (source_topic,source_partition,source_offset);
+
+-- Independent source archive: exact wire data, including late, invalid and duplicate deliveries.
+-- Retries may create physical copies. Source coordinates identify a Kafka record, not a payment.
+CREATE TABLE IF NOT EXISTS risk.payment_ingress (
+  source_topic LowCardinality(String), source_partition UInt32, source_offset UInt64,
+  source_timestamp Int64, timestamp_type LowCardinality(String),
+  key_is_null Bool, value_is_null Bool, key_base64 String CODEC(ZSTD),
+  payload_base64 String CODEC(ZSTD), payload_bytes UInt64, payload_sha256 String,
+  headers_json String CODEC(ZSTD), archived_at DateTime64(3) DEFAULT now64(3)
+) ENGINE = MergeTree ORDER BY (source_topic, source_partition, source_offset);

@@ -30,7 +30,7 @@ groups:
         labels: {severity: warning}
         annotations: {summary: Flink task is backpressured for more than half its time}
       - alert: MaterializerUnavailable
-        expr: up{job="materializer"} == 0 or risk_materializer_storage_available == 0
+        expr: up{job="materializer"} == 0 or risk_materializer_storage_available{job="materializer"} == 0
         for: 2m
         labels: {severity: critical}
         annotations: {summary: Decision materialization is unavailable}
@@ -46,3 +46,13 @@ groups:
         expr: risk_materializer_unresolved_records > 0
         labels: {severity: critical}
         annotations: {summary: Stored decisions contain unresolved conflicts or quarantined records}
+      - alert: PaymentArchiveUnavailable
+        expr: up{job="payment-archiver"} == 0 or risk_materializer_storage_available{job="payment-archiver"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: Payment input archival is unavailable; preserve the Kafka log}
+      - alert: PaymentArchiveBacklog
+        expr: risk_materializer_records_lag_max{job="payment-archiver"} > 10000
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: Payment archive backlog exceeds 10000 records on a partition}
