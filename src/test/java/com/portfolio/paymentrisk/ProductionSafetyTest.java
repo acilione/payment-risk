@@ -33,11 +33,10 @@ class ProductionSafetyTest {
     var retry = decision(9000);
     assertEquals(first.path("evaluation_id"), retry.path("evaluation_id"));
     var a =
-        MaterializerRows.convert(first, new ConsumerRecord<>("decisions", 0, 99, null, new byte[0]))
-            .evaluation();
+        MaterializerRows.convert(
+            first, new ConsumerRecord<>("decisions", 0, 99, null, new byte[0]));
     var b =
-        MaterializerRows.convert(retry, new ConsumerRecord<>("decisions", 4, 1, null, new byte[0]))
-            .evaluation();
+        MaterializerRows.convert(retry, new ConsumerRecord<>("decisions", 4, 1, null, new byte[0]));
     assertEquals(a.path("evaluation_id"), b.path("evaluation_id"));
     assertEquals(a.path("input_sha256"), b.path("input_sha256"));
     var changed =
@@ -285,5 +284,23 @@ class ProductionSafetyTest {
         () ->
             MaterializerRows.convert(
                 value, new ConsumerRecord<>("decisions", 0, 0, null, new byte[0])));
+  }
+
+  @Test
+  void policyNumbersAreNeverSilentlyTruncatedOrCoerced() throws Exception {
+    var catalog = (ObjectNode) Json.read(Files.readString(Path.of("config/policy-default.json")));
+    catalog.put("review_threshold", 30.9);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(catalog))));
+    catalog.put("review_threshold", 30);
+    ((ObjectNode) catalog.path("rules").get(0)).put("threshold", "5");
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(catalog))));
+    ((ObjectNode) catalog.path("rules").get(0)).put("threshold", 5.5);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(catalog))));
   }
 }

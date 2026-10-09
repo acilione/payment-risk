@@ -13,11 +13,16 @@ public record PolicyCatalog(String id, long version, List<JsonNode> rules, int r
 
   public static PolicyCatalog from(AppConfig c) {
     var p = Json.read(c.policyJson());
-    if (!p.path("policy_id").asText().matches("[a-zA-Z0-9._-]{1,128}")
+    if (!p.path("policy_id").isTextual()
+        || !p.path("policy_id").asText().matches("[a-zA-Z0-9._-]{1,128}")
+        || !p.path("version").isIntegralNumber()
+        || !p.path("version").canConvertToLong()
         || p.path("version").asLong() < 1
         || !p.path("rules").isArray()
         || p.path("rules").size() != 5
+        || !p.path("review_threshold").isIntegralNumber()
         || !p.path("review_threshold").canConvertToInt()
+        || !p.path("reject_threshold").isIntegralNumber()
         || !p.path("reject_threshold").canConvertToInt()
         || p.path("review_threshold").asInt() < 1
         || p.path("reject_threshold").asInt() > 100

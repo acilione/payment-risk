@@ -51,7 +51,11 @@ public class Deduplicate extends KeyedProcessFunction<String, String, String> {
             identity + "_IDENTITY_UNVERIFIABLE: legacy state has no payload fingerprint");
       if (!hash.equals(fingerprint.value()))
         throw new IllegalStateException(
-            identity + "_IDENTITY_CONFLICT: repeated identity has different business content");
+            identity
+                + "_IDENTITY_CONFLICT: existing_sha256="
+                + fingerprint.value()
+                + " incoming_sha256="
+                + hash);
       duplicate.inc();
       return;
     }

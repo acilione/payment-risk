@@ -25,9 +25,7 @@ public final class MaterializerRows {
           "event_time",
           "processed_at");
 
-  public record Rows(ObjectNode projection, ObjectNode evaluation) {}
-
-  public static Rows convert(ObjectNode decision, ConsumerRecord<String, byte[]> source) {
+  public static ObjectNode convert(ObjectNode decision, ConsumerRecord<String, byte[]> source) {
     for (String field : List.of("decision_id", "event_id", "transaction_id", "customer_id"))
       if (decision.path(field).asText().isBlank() || decision.path(field).asText().length() > 256)
         throw new IllegalArgumentException("INVALID_DECISION");
@@ -52,21 +50,17 @@ public final class MaterializerRows {
       throw new IllegalArgumentException("INVALID_EVALUATION_ID");
     if (!id.matches("eval_[0-9a-f]{64}"))
       throw new IllegalArgumentException("INVALID_EVALUATION_ID");
-    var projection = Json.object();
-    for (String field : LEGACY) projection.set(field, decision.get(field));
-    projection.put("source_partition", source.partition()).put("source_offset", source.offset());
-    var evaluation =
-        projection
-            .deepCopy()
-            .put("evaluation_id", id)
-            .put("engine_version", decision.path("engine_version").asText("legacy"))
-            .put("policy_id", decision.path("policy_id").asText("dynamic"))
-            .put("policy_version", decision.path("policy_version").asLong())
-            .put("policy_snapshot", decision.path("policy_snapshot").asText())
-            .put("rule_evidence", Json.write(decision.path("rule_evidence")))
-            .put("input_sha256", decision.path("input_sha256").asText())
-            .put("source_topic", source.topic());
-    return new Rows(projection, evaluation);
+    var row = Json.object();
+    for (String field : LEGACY) row.set(field, decision.get(field));
+    row.put("source_partition", source.partition()).put("source_offset", source.offset());
+    return row.put("evaluation_id", id)
+        .put("engine_version", decision.path("engine_version").asText("legacy"))
+        .put("policy_id", decision.path("policy_id").asText("dynamic"))
+        .put("policy_version", decision.path("policy_version").asLong())
+        .put("policy_snapshot", decision.path("policy_snapshot").asText())
+        .put("rule_evidence", Json.write(decision.path("rule_evidence")))
+        .put("input_sha256", decision.path("input_sha256").asText())
+        .put("source_topic", source.topic());
   }
 
   public static ObjectNode rejection(ConsumerRecord<String, byte[]> record, String code) {

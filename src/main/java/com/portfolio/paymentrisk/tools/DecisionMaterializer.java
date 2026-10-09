@@ -64,9 +64,7 @@ public final class DecisionMaterializer {
           // Registry/network outages propagate; they are not malformed payment records.
           try {
             var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
-            evaluations
-                .append(Json.write(MaterializerRows.convert(decision, record).evaluation()))
-                .append('\n');
+            evaluations.append(Json.write(MaterializerRows.convert(decision, record))).append('\n');
           } catch (IllegalArgumentException | org.apache.avro.AvroRuntimeException e) {
             rejections
                 .append(Json.write(MaterializerRows.rejection(record, "INVALID_DECISION")))

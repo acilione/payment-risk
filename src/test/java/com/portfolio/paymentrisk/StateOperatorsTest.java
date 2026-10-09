@@ -272,4 +272,46 @@ class StateOperatorsTest {
       assertEquals(1, h.extractOutputValues().size());
     }
   }
+
+  @Test
+  void restoredPendingPaymentKeepsItsPolicyThresholdsDuringCatalogUpgrade() throws Exception {
+    var policy =
+        (ObjectNode)
+            Json.read(
+                java.nio.file.Files.readString(
+                    java.nio.file.Path.of("config/policy-default.json")));
+    org.apache.flink.runtime.checkpoint.OperatorSubtaskState checkpoint;
+    try (var h = harness(AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(policy))))) {
+      h.processElement(
+          Json.write(RiskEngineTest.tx("old-policy", 100_000, 90_000, "d1", "APPROVED")), 100_000);
+      checkpoint = h.snapshot(1, 1);
+    }
+    policy.put("version", 2).put("review_threshold", 70).put("reject_threshold", 90);
+    var op =
+        new CoBroadcastWithKeyedOperator<String, String, String, String>(
+            new CustomerRiskProcessor(
+                AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(policy)))),
+            List.of(CustomerRiskProcessor.RULES));
+    try (var h =
+        new KeyedBroadcastOperatorTestHarness<String, String, String, String>(
+            op, v -> Json.read(v).path("customer_id").asText(), Types.STRING, 128, 1, 0)) {
+      h.initializeState(checkpoint);
+      h.open();
+      h.getTwoInputOperator()
+          .processWatermarkStatus2(
+              org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.IDLE);
+      h.processWatermark(100_000);
+      h.processElement(
+          Json.write(RiskEngineTest.tx("new-policy", 100_001, 90_000, "d2", "APPROVED")), 100_001);
+      h.processWatermark(100_001);
+      var old = Json.read(h.extractOutputValues().get(0));
+      var next = Json.read(h.extractOutputValues().get(1));
+      assertEquals(30, old.path("risk_score").asInt());
+      assertEquals(30, next.path("risk_score").asInt());
+      assertEquals("REVIEW", old.path("decision").asText());
+      assertEquals("APPROVE", next.path("decision").asText());
+      assertEquals(1, old.path("policy_version").asLong());
+      assertEquals(2, next.path("policy_version").asLong());
+    }
+  }
 }

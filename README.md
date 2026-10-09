@@ -121,7 +121,7 @@ Payments and rules are separate Kafka inputs with no shared activation order. Af
 
 ### Immutable policy releases
 
-Set `POLICY_FILE` to a catalog such as [config/policy-default.json](config/policy-default.json), or provide `POLICY_CATALOG_JSON`. The catalog contains a policy ID, version, all five rule configurations, and classification thresholds. `POLICY_SHA256` optionally checks the exact file bytes. The Helm chart requires this checksum and a ConfigMap containing `policy.json`; create that ConfigMap as immutable.
+Set `POLICY_FILE` to a catalog such as [config/policy-default.json](config/policy-default.json), or provide `POLICY_CATALOG_JSON`. The catalog contains a policy ID, version, all five rule configurations, and classification thresholds. Versions, scores, windows and thresholds must be integers within their supported ranges; decimal numbers and numeric strings are rejected instead of being silently converted. `POLICY_SHA256` optionally checks the exact file bytes. The Helm chart requires this checksum and a ConfigMap containing `policy.json`; create that ConfigMap as immutable.
 
 With a catalog, the job ignores broadcast updates and records this in a counter. Payments keep their catalog, thresholds and policy identity in pending state, including across restore. A change requires a new version and deployment. This avoids cross-stream ordering dependence for policy selection; it does not eliminate late input, missing history or data conflicts. `staging` and `production` reject startup without a catalog. Dynamic updates remain available locally for demonstrating broadcast state. A checksum detects accidental changes; it is not an approval signature.
 

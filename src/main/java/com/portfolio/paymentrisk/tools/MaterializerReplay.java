@@ -121,10 +121,8 @@ public final class MaterializerReplay {
             rows.append(
                     Json.write(
                         MaterializerRows.convert(
-                                (ObjectNode)
-                                    Json.read(codec.decode(record.value(), "risk-decision")),
-                                record)
-                            .evaluation()))
+                            (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision")),
+                            record)))
                 .append('\n');
           } catch (IllegalArgumentException | org.apache.avro.AvroRuntimeException e) {
             failures
