@@ -50,6 +50,10 @@ public final class IntegrationScenario {
               .send(new ProducerRecord<>(c.topic("payments.raw"), 0, run, new byte[] {99}))
               .get()
               .offset();
+      // Kafka producer acknowledgements do not prove that an idle Flink input has resumed.
+      // A checkpoint covering these offsets proves the reversed payments are in managed state
+      // before another partition can advance the global watermark with future markers.
+      awaitSourceCheckpoint(c, malformedOffset + 1);
       // Keep every partition advancing, including after worker recovery.
       for (int round = 0; round < 15; round++) {
         for (int partition = 0; partition < 3; partition++) {
@@ -168,6 +172,25 @@ public final class IntegrationScenario {
                 dlq,
                 "late",
                 late)));
+  }
+
+  private static void awaitSourceCheckpoint(AppConfig config, long nextOffset) throws Exception {
+    var properties = config.kafkaProperties();
+    properties.put("bootstrap.servers", config.bootstrap());
+    var partition = new org.apache.kafka.common.TopicPartition(config.topic("payments.raw"), 0);
+    try (var admin = org.apache.kafka.clients.admin.AdminClient.create(properties)) {
+      long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
+      while (System.nanoTime() < deadline) {
+        var offsets =
+            admin
+                .listConsumerGroupOffsets(config.group() + "-payments")
+                .partitionsToOffsetAndMetadata()
+                .get(10, java.util.concurrent.TimeUnit.SECONDS);
+        if (offsets.containsKey(partition) && offsets.get(partition).offset() >= nextOffset) return;
+        Thread.sleep(250);
+      }
+    }
+    throw new AssertionError("Payment source checkpoint did not include the test input");
   }
 
   static com.fasterxml.jackson.databind.node.ObjectNode transaction(
