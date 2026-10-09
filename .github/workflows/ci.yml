@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with: {distribution: temurin, java-version: '21', cache: maven}
       - run: mvn -B spotless:check verify cyclonedx:makeAggregateBom
+      - run: mvn -B -Dtest=StateLoadTest -Drisk.load=true test
       - run: python3 scripts/init-env.py && docker compose config --quiet
       - run: pip install PyYAML==6.0.3 jsonschema==4.26.0
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
@@ -25,7 +26,11 @@ jobs:
       - run: docker run --rm -v "$PWD/observability/prometheus:/rules:ro" -w /rules --entrypoint promtool prom/prometheus:v3.14.0 test rules alerts.test.yml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
-        with: {name: test-results-and-sbom, path: 'target/'}
+        with:
+          name: test-results-and-sbom
+          path: |
+            target/
+            artifacts/state-load.json
   integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -33,6 +38,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: make up run-job simulate-customers integration-test recovery-test
       - run: make stop-job restore integration-test idle-resume-test verify-observability
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: {node-version: '24.20.0'}
+      - run: node --env-file=.env scripts/benchmark-investigation.mjs
       - run: python3 scripts/verify-materializer.py
       - run: make stop-job && python3 scripts/verify-ingress.py
       - if: always()

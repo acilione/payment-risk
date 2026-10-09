@@ -34,6 +34,7 @@ import {
 import type { Decision, Overview, WindowKey } from "./types";
 import { demoOverview, ruleCatalog } from "./demo";
 import "./style.css";
+import { Investigations } from "./Investigations";
 
 const staticDemo = import.meta.env.VITE_DEMO_MODE === "true";
 const github = "https://github.com/acilione/payment-risk";
@@ -206,6 +207,7 @@ function App() {
           {[
             [LayoutDashboard, "Overview"],
             [ArrowDownLeft, "Transactions"],
+            [Search, "Investigations"],
             [ShieldCheck, "Risk rules"],
             [Workflow, "Architecture"],
           ].map(([Icon, name]) => {
@@ -297,9 +299,11 @@ function App() {
                   ? "Payment totals, risk decisions, and service status."
                   : tab === "Transactions"
                     ? "Search payment decisions and review their scores and matched rules."
-                    : tab === "Risk rules"
-                      ? "Default rules, score weights, and decision thresholds."
-                      : "How payments are processed, stored, and recovered after a restart."}
+                    : tab === "Investigations"
+                      ? "Customer histories, recorded evidence, and decisions to review."
+                      : tab === "Risk rules"
+                        ? "Default rules, score weights, and decision thresholds."
+                        : "How payments are processed, stored, and recovered after a restart."}
               </p>
             </div>
             <div className="heading-actions">
@@ -378,6 +382,9 @@ function App() {
                 Retry
               </button>
             </div>
+          )}
+          {tab === "Investigations" && (
+            <Investigations key={String(demo)} demo={demo} />
           )}
           {(tab === "Overview" || tab === "Transactions") && (
             <>
