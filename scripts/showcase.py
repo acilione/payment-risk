@@ -292,11 +292,11 @@ def main():
         own_jobmanager = subprocess.check_output(["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=" + PROJECT,
                                                   "--filter", "label=com.docker.compose.service=jobmanager"], text=True).strip()
         if own_jobmanager:
-            try:
-                operations.job()
-            except (OSError, RuntimeError):
-                pass
-            else:
+            active = [job for job in operations.rest("/jobs/overview")["jobs"]
+                      if job["state"] not in ("FINISHED", "CANCELED", "FAILED")]
+            if len(active) > 1 or any(job["name"] != "payment-risk-v1" for job in active):
+                raise RuntimeError("Unexpected active jobs; inspect the showcase stack before stopping it")
+            if active:
                 operations.savepoint(stop=True)
         compose("down")
     else:
