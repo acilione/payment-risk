@@ -4,60 +4,75 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.portfolio.paymentrisk.*;
 import com.portfolio.paymentrisk.config.AppConfig;
 import com.portfolio.paymentrisk.serialization.AvroCodec;
-import java.net.*;
-import java.net.http.*;
+import com.portfolio.paymentrisk.storage.*;
 import java.time.Duration;
 import java.util.*;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.serialization.*;
 
-/** Read committed -> synchronous ClickHouse batch insert -> synchronous Kafka commit. */
+/** Committed Kafka records -> durable deliveries/quarantine -> synchronous offset commit. */
 public final class DecisionMaterializer {
   private DecisionMaterializer() {}
 
   public static void main(String[] args) throws Exception {
     var c = AppConfig.fromEnv();
-    var p = c.kafkaProperties();
-    p.put("bootstrap.servers", c.bootstrap());
-    p.put("group.id", System.getenv().getOrDefault("MATERIALIZER_GROUP", "risk-clickhouse-v1"));
-    p.put("key.deserializer", StringDeserializer.class.getName());
-    p.put("value.deserializer", ByteArrayDeserializer.class.getName());
-    p.put("enable.auto.commit", "false");
-    p.put("isolation.level", "read_committed");
-    p.put("auto.offset.reset", "earliest");
-    p.put("max.poll.records", "500");
+    var p =
+        KafkaIngestion.properties(
+            c,
+            System.getenv().getOrDefault("MATERIALIZER_GROUP", "risk-clickhouse-evaluations-v2"),
+            false);
     var codec = new AvroCodec(c.registry());
-    var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-    String endpoint = System.getenv().getOrDefault("CLICKHOUSE_URL", "http://localhost:28123");
-    if (c.environment().equals("production") && !endpoint.startsWith("https://"))
-      throw new IllegalArgumentException("ClickHouse TLS required");
-    try (var consumer = new KafkaConsumer<String, byte[]>(p)) {
-      consumer.subscribe(List.of(c.topic("risk.decisions")));
+    try (var metrics =
+            new MaterializerMetrics(
+                Integer.parseInt(
+                    System.getenv().getOrDefault("MATERIALIZER_METRICS_PORT", "9405")));
+        var consumer = new KafkaConsumer<String, byte[]>(p)) {
+      var writer = KafkaIngestion.writer(c, metrics);
+      KafkaIngestion.subscribe(
+          consumer, c.topic("risk.decisions"), c.environment().equals("local"));
+      long lastProbe = 0;
       while (!Thread.currentThread().isInterrupted()) {
         var records = consumer.poll(Duration.ofSeconds(1));
-        if (records.isEmpty()) continue;
-        var body = new StringBuilder("INSERT INTO risk.decisions FORMAT JSONEachRow\n");
-        for (var r : records) {
-          var row = (ObjectNode) Json.read(codec.decode(r.value(), "risk-decision"));
-          row.put("source_partition", r.partition()).put("source_offset", r.offset());
-          body.append(Json.write(row)).append('\n');
+        metrics.lastPoll.set(System.currentTimeMillis());
+        if (System.currentTimeMillis() - lastProbe > 15000) {
+          writer.inspectIntegrity();
+          lastProbe = System.currentTimeMillis();
         }
-        var request =
-            HttpRequest.newBuilder(URI.create(endpoint))
-                .timeout(Duration.ofSeconds(30))
-                .header(
-                    "X-ClickHouse-User", System.getenv().getOrDefault("CLICKHOUSE_USER", "risk"))
-                .header(
-                    "X-ClickHouse-Key",
-                    Objects.requireNonNull(
-                        System.getenv("CLICKHOUSE_PASSWORD"), "CLICKHOUSE_PASSWORD required"))
-                .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
-                .build();
-        var response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() / 100 != 2)
-          throw new IllegalStateException("ClickHouse insert failed HTTP " + response.statusCode());
-        consumer.commitSync();
+        if (records.isEmpty()) continue;
+        var batch =
+            new DurableKafkaBatch(
+                writer, consumer::commitSync, metrics, DurableKafkaBatch.DEFAULT_BYTES);
+        long decodeDeadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        for (var record : records) {
+          if (System.nanoTime() > decodeDeadline)
+            throw new java.io.IOException("Decode budget exceeded; offsets remain uncommitted");
+          // Registry/network outages propagate; they are not malformed payment records.
+          String table, row;
+          try {
+            var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
+            table = "risk.evaluations";
+            row = Json.write(MaterializerRows.convert(decision, record));
+          } catch (IllegalArgumentException | org.apache.avro.AvroRuntimeException e) {
+            table = "risk.materializer_rejections";
+            row = Json.write(MaterializerRows.rejection(record, "INVALID_DECISION"));
+          }
+          batch.add(table, row, record);
+        }
+        batch.flush();
+        long lag = 0;
+        for (var partition : consumer.assignment())
+          lag = Math.max(lag, consumer.currentLag(partition).orElse(0));
+        metrics.lag.set(lag);
       }
     }
+  }
+
+  // If either insert fails or the process dies before commit, every row is replayable.
+  public static void persist(
+      ClickHouseWriter writer, String evaluations, String rejections, Runnable commit)
+      throws java.io.IOException, InterruptedException {
+    writer.insert("risk.evaluations", evaluations);
+    writer.insert("risk.materializer_rejections", rejections);
+    commit.run();
   }
 }

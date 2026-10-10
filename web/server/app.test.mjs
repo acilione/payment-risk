@@ -70,22 +70,24 @@ test("invalid source telemetry is unavailable; analytics normalize ClickHouse nu
       else {
         assert.match(
           options.body,
-          /SETTINGS readonly=1, max_execution_time=4 FORMAT JSON$/,
+          /SETTINGS readonly=1, max_execution_time=4, max_memory_usage=268435456, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864 FORMAT JSON$/,
         );
         assert.equal(options.headers["X-ClickHouse-Key"], "test-only");
         body = {
-          data: options.body.includes("AS transactions")
-            ? [
-                {
-                  transactions: "2",
-                  amountMinor: "1299",
-                  approved: "1",
-                  review: "1",
-                  rejected: "0",
-                  finalizationP95: "21000",
-                },
-              ]
-            : [],
+          data: options.body.includes("AS unresolved")
+            ? [{ unresolved: "0" }]
+            : options.body.includes("AS transactions")
+              ? [
+                  {
+                    transactions: "2",
+                    amountMinor: "1299",
+                    approved: "1",
+                    review: "1",
+                    rejected: "0",
+                    finalizationP95: "21000",
+                  },
+                ]
+              : [],
         };
       }
       return { ok: true, json: async () => body };
@@ -104,4 +106,55 @@ test("invalid source telemetry is unavailable; analytics normalize ClickHouse nu
   );
   assert.equal(result.job, null);
   assert.equal(result.checkpoint, null);
+});
+
+test("conflicting or quarantined decisions prevent publishing analytical totals", async () => {
+  const reader = createReader(
+    {
+      clickhouse: "http://analytics",
+      flink: "http://flink",
+      prometheus: "http://metrics",
+    },
+    async (url, options) => ({
+      ok: true,
+      json: async () =>
+        url.includes("analytics")
+          ? {
+              data: options.body.includes("AS unresolved")
+                ? [{ unresolved: "1" }]
+                : [],
+            }
+          : { jobs: [] },
+    }),
+  );
+  await assert.rejects(reader("1h"), /integrity requires review/);
+});
+
+test("showcase serves only the configured report and handles missing reports", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = await mkdtemp(join(tmpdir(), "payment-showcase-"));
+  const path = join(dir, "latest.json");
+  const app = await buildApp({ showcasePath: path });
+  try {
+    assert.equal((await app.inject("/api/showcase")).statusCode, 503);
+    await writeFile(
+      path,
+      JSON.stringify({
+        run_id: "show-test",
+        status: "COMPLETE",
+        stored_decisions: 251,
+      }),
+    );
+    const result = await app.inject("/api/showcase?path=/etc/passwd");
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.json().run_id, "show-test");
+    assert.equal(result.headers["cache-control"], "no-store");
+    await writeFile(path, "malformed");
+    assert.equal((await app.inject("/api/showcase")).statusCode, 503);
+  } finally {
+    await app.close();
+    await rm(dir, { recursive: true });
+  }
 });

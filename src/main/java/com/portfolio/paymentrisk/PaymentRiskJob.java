@@ -65,8 +65,15 @@ public final class PaymentRiskJob {
             .process(new Deduplicate(c.dedupMs()))
             .uid("transaction-dedup-v1")
             .name("deduplicate");
-    var decisions =
+    // The current domain is one authorization result per transaction, not a lifecycle stream.
+    var uniqueTransactions =
         unique
+            .keyBy(s -> Json.read(s).path("transaction_id").asText())
+            .process(new Deduplicate(c.dedupMs(), "TRANSACTION"))
+            .uid("transaction-identity-v1")
+            .name("validate-transaction-identity");
+    var decisions =
+        uniqueTransactions
             .keyBy(s -> Json.read(s).path("customer_id").asText())
             .connect(ruleWatermarks.broadcast(CustomerRiskProcessor.RULES))
             .process(new CustomerRiskProcessor(c))

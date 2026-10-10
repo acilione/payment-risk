@@ -21,6 +21,7 @@ import {
   Layers3,
   LayoutDashboard,
   Menu,
+  Play,
   Radio,
   RefreshCw,
   Search,
@@ -34,6 +35,8 @@ import {
 import type { Decision, Overview, WindowKey } from "./types";
 import { demoOverview, ruleCatalog } from "./demo";
 import "./style.css";
+import { Investigations } from "./Investigations";
+import { Showcase } from "./Showcase";
 
 const staticDemo = import.meta.env.VITE_DEMO_MODE === "true";
 const github = "https://github.com/acilione/payment-risk";
@@ -58,6 +61,7 @@ const label = { APPROVE: "Approved", REVIEW: "Review", REJECT: "Rejected" };
 
 function App() {
   const [tab, setTab] = useState("Overview");
+  const [investigationCustomer, setInvestigationCustomer] = useState("");
   const [demo, setDemo] = useState(import.meta.env.VITE_DEMO_MODE === "true");
   const [window, setWindow] = useState<WindowKey>("24h");
   const [data, setData] = useState<Overview | null>(() =>
@@ -99,6 +103,11 @@ function App() {
       setData(demoOverview(window));
       setError("");
       setLoading(false);
+      return;
+    }
+    if (tab === "Investigations" || tab === "Showcase") {
+      setLoading(false);
+      setError("");
       return;
     }
     let active = true;
@@ -143,7 +152,7 @@ function App() {
       controller?.abort();
       clearInterval(interval);
     };
-  }, [demo, window, refresh]);
+  }, [demo, window, refresh, tab]);
   useEffect(() => {
     if (selected) dialog.current?.showModal();
     else dialog.current?.close();
@@ -170,6 +179,7 @@ function App() {
   const nav = (name: string) => {
     setTab(name);
     setMenu(false);
+    globalThis.scrollTo(0, 0);
   };
   return (
     <div className="app-shell">
@@ -205,7 +215,9 @@ function App() {
         <nav aria-label="Main navigation">
           {[
             [LayoutDashboard, "Overview"],
+            [Play, "Showcase"],
             [ArrowDownLeft, "Transactions"],
+            [Search, "Investigations"],
             [ShieldCheck, "Risk rules"],
             [Workflow, "Architecture"],
           ].map(([Icon, name]) => {
@@ -297,9 +309,13 @@ function App() {
                   ? "Payment totals, risk decisions, and service status."
                   : tab === "Transactions"
                     ? "Search payment decisions and review their scores and matched rules."
-                    : tab === "Risk rules"
-                      ? "Default rules, score weights, and decision thresholds."
-                      : "How payments are processed, stored, and recovered after a restart."}
+                    : tab === "Showcase"
+                      ? "Generate customer payments and follow a verified pipeline run."
+                      : tab === "Investigations"
+                        ? "Customer histories, recorded evidence, and decisions to review."
+                        : tab === "Risk rules"
+                          ? "Default rules, score weights, and decision thresholds."
+                          : "How payments are processed, stored, and recovered after a restart."}
               </p>
             </div>
             <div className="heading-actions">
@@ -339,9 +355,10 @@ function App() {
             <div className="demo-banner">
               <span>
                 <Database size={15} />
-                <strong>Demo data</strong>
+                <strong>Saved pipeline run</strong>
                 <span>
-                  Transactions, charts, and service status use sample data.
+                  Generated payments from a verified Kafka, Flink and ClickHouse
+                  run.
                 </span>
               </span>
               <button
@@ -378,6 +395,23 @@ function App() {
                 Retry
               </button>
             </div>
+          )}
+          {tab === "Showcase" && (
+            <Showcase
+              key={String(demo)}
+              demo={demo}
+              investigate={(id) => {
+                setInvestigationCustomer(id);
+                nav("Investigations");
+              }}
+            />
+          )}
+          {tab === "Investigations" && (
+            <Investigations
+              key={String(demo)}
+              demo={demo}
+              initialCustomer={investigationCustomer}
+            />
           )}
           {(tab === "Overview" || tab === "Transactions") && (
             <>
@@ -462,7 +496,11 @@ function App() {
                   <div className="card-heading">
                     <div>
                       <h2>Decisions over time</h2>
-                      <p>Payment counts by decision and time interval</p>
+                      <p>
+                        {demo
+                          ? "Counts by payment event time"
+                          : "Counts by decision processing time"}
+                      </p>
                     </div>
                     <span className="chip">
                       {window === "1h"
@@ -775,7 +813,7 @@ function App() {
                   <span>
                     <CheckCheck size={13} />{" "}
                     {demo
-                      ? "Sample transactions"
+                      ? "Generated payment decisions"
                       : "One decision per transaction"}
                   </span>
                   <span>
@@ -980,8 +1018,9 @@ function App() {
             </p>
             <div className="source-position">
               <Database size={15} />
-              Kafka partition {selected.source_partition} · offset{" "}
-              {selected.source_offset}
+              {demo
+                ? "Synthetic engine fixture; no Kafka delivery"
+                : `Kafka partition ${selected.source_partition} / offset ${selected.source_offset}`}
             </div>
           </div>
         )}
@@ -1054,11 +1093,6 @@ function Stat({
       <strong className="stat-value">{value}</strong>
       <div className="stat-bottom">
         <span>{detail}</span>
-        <span className={`mini-chart ${chart}`} aria-hidden="true">
-          {[35, 55, 42, 73, 62, 88, 100].map((height, i) => (
-            <i key={i} style={{ height: `${height}%` }} />
-          ))}
-        </span>
       </div>
     </article>
   );

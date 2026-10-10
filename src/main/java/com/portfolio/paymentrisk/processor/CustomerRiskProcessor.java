@@ -25,13 +25,24 @@ public class CustomerRiskProcessor
   private transient Counter late, updates, stale;
   private transient Map<String, Counter> decisions, matches;
   private transient org.apache.flink.runtime.metrics.DescriptiveStatisticsHistogram evaluation;
-  private transient Counter amount;
+  private transient Counter amount, pendingOverdue, frozenUpdates;
+  private transient ValueState<Long> pendingSince, pendingWatchdog;
+  private transient PolicyCatalog catalog;
 
   public CustomerRiskProcessor(AppConfig config) {
     this.config = config;
   }
 
   public void open(OpenContext c) {
+    catalog = config.policyJson().isEmpty() ? null : PolicyCatalog.from(config);
+    pendingSince =
+        getRuntimeContext().getState(new ValueStateDescriptor<>("pending-since-v1", Types.LONG));
+    pendingWatchdog =
+        getRuntimeContext().getState(new ValueStateDescriptor<>("pending-watchdog-v1", Types.LONG));
+    pendingOverdue =
+        getRuntimeContext().getMetricGroup().counter("risk_pending_overdue_observations_total");
+    frozenUpdates =
+        getRuntimeContext().getMetricGroup().counter("risk_frozen_policy_updates_ignored_total");
     finalizedThrough =
         getRuntimeContext()
             .getState(new ValueStateDescriptor<>("finalized-through-v1", Types.LONG));
@@ -100,6 +111,7 @@ public class CustomerRiskProcessor
   }
 
   private List<JsonNode> snapshot(ReadOnlyBroadcastState<String, String> state) throws Exception {
+    if (catalog != null) return catalog.rules();
     var rules = new TreeMap<String, JsonNode>();
     for (var r : Rules.defaults()) rules.put(r.path("rule_id").asText(), r);
     for (var e : state.immutableEntries()) rules.put(e.getKey(), Json.read(e.getValue()));
@@ -110,6 +122,10 @@ public class CustomerRiskProcessor
       throws Exception {
     var r = Json.read(value);
     Rules.validate(r, config);
+    if (catalog != null) {
+      frozenUpdates.inc();
+      return;
+    }
     var state = ctx.getBroadcastState(RULES);
     String id = r.path("rule_id").asText(), previous = state.get(id);
     long version = previous == null ? 1 : Json.read(previous).path("version").asLong();
@@ -149,14 +165,46 @@ public class CustomerRiskProcessor
     var bucket = rows(pending.get(t));
     var item = Json.object();
     item.set("transaction", tx);
+    item.put("queued_at", ctx.timerService().currentProcessingTime());
     item.set("rules", Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES))));
+    item.put("review_threshold", catalog == null ? config.review() : catalog.review());
+    item.put("reject_threshold", catalog == null ? config.reject() : catalog.reject());
+    item.put("policy_id", catalog == null ? "dynamic" : catalog.id());
+    item.put("policy_version", catalog == null ? 0 : catalog.version());
     bucket.add(item);
     pending.put(t, Json.write(bucket));
     pendingCount.update(count(pendingCount) + 1);
+    if (pendingSince.value() == null) {
+      long now = ctx.timerService().currentProcessingTime();
+      pendingSince.update(now);
+      pendingWatchdog.update(now + config.pendingAlertMs());
+      ctx.timerService().registerProcessingTimeTimer(now + config.pendingAlertMs());
+    }
     ctx.timerService().registerEventTimeTimer(t);
   }
 
   public void onTimer(long t, OnTimerContext ctx, Collector<String> out) throws Exception {
+    if (ctx.timeDomain() == org.apache.flink.streaming.api.TimeDomain.PROCESSING_TIME) {
+      if (count(pendingCount) > 0) {
+        long oldest = ctx.timerService().currentProcessingTime();
+        for (String value : pending.values())
+          for (var item : StateHistory.rows(value))
+            oldest = Math.min(oldest, item.path("queued_at").asLong(pendingSince.value()));
+        pendingSince.update(oldest);
+        if (ctx.timerService().currentProcessingTime() - oldest >= config.pendingAlertMs()) {
+          pendingOverdue.inc();
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .warn(
+                  "event=pending_overdue age_ms={} pending_events={}",
+                  ctx.timerService().currentProcessingTime() - pendingSince.value(),
+                  count(pendingCount));
+        }
+        long next = ctx.timerService().currentProcessingTime() + config.pendingAlertMs();
+        pendingWatchdog.update(next);
+        ctx.timerService().registerProcessingTimeTimer(next);
+      }
+      return;
+    }
     if (cleanupAt.value() != null && cleanupAt.value() == t) cleanupAt.clear();
     // Clean only the timer's logical time, never a jumped watermark: earlier pending events still
     // need history.
@@ -165,7 +213,7 @@ public class CustomerRiskProcessor
     for (var e : history.entries())
       if (e.getKey() <= t - config.historyMs()) {
         expired.add(e.getKey());
-        removed += rows(e.getValue()).size();
+        for (var ignored : StateHistory.rows(e.getValue())) removed++;
       }
     for (long k : expired) history.remove(k);
     setCount(historyCount, count(historyCount) - removed);
@@ -182,17 +230,15 @@ public class CustomerRiskProcessor
       return;
     }
     bucket.sort(Comparator.comparing(n -> n.path("transaction").path("event_id").asText()));
-    var recent = new ArrayList<JsonNode>();
-    for (String value : history.values()) recent.addAll(rows(value));
-    var known = new HashMap<String, Long>();
-    for (var e : devices.entries()) known.put(e.getKey(), e.getValue());
     var current = rows(history.get(t));
+    var recent = StateHistory.read(history, t, current);
     for (var item : bucket) {
       if (count(historyCount) >= config.maxEvents())
         throw new IllegalStateException("Customer history state limit exceeded");
       var tx = item.path("transaction");
       String device = tx.path("device_id").asText();
-      if (!known.containsKey(device) && count(deviceCount) >= config.maxDevices())
+      Long lastSeen = devices.get(device);
+      if (lastSeen == null && count(deviceCount) >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
       var rules = new ArrayList<JsonNode>();
       item.path("rules").forEach(rules::add);
@@ -201,11 +247,16 @@ public class CustomerRiskProcessor
           RiskEngine.evaluate(
               tx,
               recent,
-              known,
+              lastSeen,
               rules,
-              config.review(),
-              config.reject(),
+              item.path("review_threshold").asInt(config.review()),
+              item.path("reject_threshold").asInt(config.reject()),
               System.currentTimeMillis());
+      Audit.attachPolicy(
+          decision,
+          tx,
+          item.path("policy_id").asText("dynamic"),
+          item.path("policy_version").asLong());
       evaluation.update((System.nanoTime() - started) / 1000);
       amount.inc(tx.path("amount_minor").asLong());
       out.collect(Json.write(decision));
@@ -218,17 +269,21 @@ public class CustomerRiskProcessor
               .put("currency", tx.path("currency").asText())
               .put("device_id", device)
               .put("status", tx.path("status").asText());
-      recent.add(feature);
       current.add(feature);
       historyCount.update(count(historyCount) + 1);
-      if (!known.containsKey(device)) deviceCount.update(count(deviceCount) + 1);
-      known.put(device, t);
+      if (lastSeen == null) deviceCount.update(count(deviceCount) + 1);
       devices.put(device, t);
     }
     history.put(t, Json.write(current));
     finalizedThrough.update(t);
     pending.remove(t);
     setCount(pendingCount, count(pendingCount) - bucket.size());
+    if (count(pendingCount) == 0) {
+      if (pendingWatchdog.value() != null)
+        ctx.timerService().deleteProcessingTimeTimer(pendingWatchdog.value());
+      pendingWatchdog.clear();
+      pendingSince.clear();
+    }
     scheduleCleanup(ctx);
   }
 }

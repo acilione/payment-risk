@@ -53,6 +53,8 @@ spec:
             capabilities: {drop: [ALL]}
           env:
             - {name: APP_ENVIRONMENT, value: production}
+            - {name: POLICY_FILE, value: /etc/policy/policy.json}
+            - {name: POLICY_SHA256, value: {{ required "policySha256 required" .Values.policySha256 | quote }}}
             - {name: KAFKA_BOOTSTRAP_SERVERS, value: {{ required "bootstrapServers required" .Values.bootstrapServers | quote }}}
             - {name: SCHEMA_REGISTRY_URL, value: {{ required "schemaRegistryUrl required" .Values.schemaRegistryUrl | quote }}}
             - {name: STARTUP_OFFSETS, value: committed}
@@ -61,8 +63,11 @@ spec:
           envFrom:
             - secretRef: {name: {{ .Values.existingSecret }}}
           volumeMounts:
+            - {name: policy, mountPath: /etc/policy, readOnly: true}
             - {name: credentials, mountPath: /etc/risk, readOnly: true}
       volumes:
+        - name: policy
+          configMap: {name: {{ required "policyConfigMap required" .Values.policyConfigMap }}}
         - name: credentials
           secret: {secretName: {{ .Values.existingSecret }}}
   job:

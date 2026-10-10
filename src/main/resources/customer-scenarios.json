@@ -1,0 +1,355 @@
+{
+  "dataset_version": 1,
+  "description": "Curated synthetic customer stories; labels are authored independently of rule output, not confirmed fraud.",
+  "cases": [
+    {
+      "id": "everyday",
+      "label": "LEGITIMATE",
+      "story": "A customer pays for coffee, groceries and public transport using the same phone.",
+      "expected_score": 0,
+      "expected_rules": [],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -600,
+          "amount_minor": 4270,
+          "device": "phone",
+          "merchant": "grocer",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 220,
+          "device": "phone",
+          "merchant": "transport",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "known-device-large",
+      "label": "LEGITIMATE",
+      "story": "A customer buys an appliance for EUR 1,100 using a phone already observed during this session.",
+      "expected_score": 0,
+      "expected_rules": [],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 110000,
+          "device": "phone",
+          "merchant": "appliances",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "new-phone",
+      "label": "LEGITIMATE",
+      "story": "A customer replaces their phone and buys a EUR 900 laptop. The new device is legitimate, but the engine cannot know that.",
+      "expected_score": 30,
+      "expected_rules": [
+        "R004"
+      ],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 90000,
+          "device": "replacement-phone",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "account-takeover",
+      "label": "SUSPICIOUS",
+      "story": "An attacker uses several devices for rapid EUR 900 attempts. Four are declined before two are approved by the payment provider.",
+      "expected_score": 100,
+      "expected_rules": [
+        "R001",
+        "R002",
+        "R003",
+        "R004",
+        "R005"
+      ],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -100,
+          "amount_minor": 90000,
+          "device": "attacker-0",
+          "merchant": "electronics",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -80,
+          "amount_minor": 90000,
+          "device": "attacker-1",
+          "merchant": "electronics",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -60,
+          "amount_minor": 90000,
+          "device": "attacker-2",
+          "merchant": "electronics",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -40,
+          "amount_minor": 90000,
+          "device": "attacker-3",
+          "merchant": "electronics",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -20,
+          "amount_minor": 90000,
+          "device": "attacker-4",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 90000,
+          "device": "attacker-5",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "card-testing",
+      "label": "SUSPICIOUS",
+      "story": "An attacker makes four declined EUR 1 attempts and then a EUR 900 payment from the same device.",
+      "expected_score": 40,
+      "expected_rules": [
+        "R005"
+      ],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -100,
+          "amount_minor": 100,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -80,
+          "amount_minor": 100,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -60,
+          "amount_minor": 100,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": -40,
+          "amount_minor": 100,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 90000,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "multiple-devices",
+      "label": "SUSPICIOUS",
+      "story": "An attacker spends EUR 1,100 three times from three devices within 80 seconds.",
+      "expected_score": 85,
+      "expected_rules": [
+        "R002",
+        "R003",
+        "R004"
+      ],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -80,
+          "amount_minor": 110000,
+          "device": "attacker-0",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -40,
+          "amount_minor": 110000,
+          "device": "attacker-1",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 110000,
+          "device": "attacker-2",
+          "merchant": "electronics",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "small-payment-burst",
+      "label": "SUSPICIOUS",
+      "story": "An attacker sends six EUR 5 payments within 75 seconds. Frequency alone scores below the review threshold.",
+      "expected_score": 25,
+      "expected_rules": [
+        "R001"
+      ],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -75,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -60,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -45,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -30,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -15,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 500,
+          "device": "attacker",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "stolen-trusted-device",
+      "label": "SUSPICIOUS",
+      "story": "An attacker with access to the known phone makes one ordinary EUR 70 purchase. The available fields look like legitimate activity.",
+      "expected_score": 0,
+      "expected_rules": [],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 7000,
+          "device": "phone",
+          "merchant": "online-store",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "legitimate-retry",
+      "label": "LEGITIMATE",
+      "story": "A customer retries a EUR 20 purchase after one decline. Each authorization attempt has a distinct transaction ID.",
+      "expected_score": 0,
+      "expected_rules": [],
+      "payments": [
+        {
+          "seconds": -1200,
+          "amount_minor": 350,
+          "device": "phone",
+          "merchant": "cafe",
+          "status": "APPROVED"
+        },
+        {
+          "seconds": -20,
+          "amount_minor": 2000,
+          "device": "phone",
+          "merchant": "grocer",
+          "status": "DECLINED"
+        },
+        {
+          "seconds": 0,
+          "amount_minor": 2000,
+          "device": "phone",
+          "merchant": "grocer",
+          "status": "APPROVED"
+        }
+      ]
+    }
+  ]
+}

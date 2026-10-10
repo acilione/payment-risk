@@ -13,7 +13,7 @@ USER root
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop \
  && cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /opt/flink/plugins/s3-fs-hadoop/ \
  && test -f /opt/flink/plugins/metrics-prometheus/flink-metrics-prometheus-2.2.1.jar \
- && mkdir -p /opt/flink/usrlib && chown -R flink:flink /opt/flink/usrlib
+ && mkdir -p /opt/flink/usrlib /opt/flink/artifacts && chown -R flink:flink /opt/flink/usrlib /opt/flink/artifacts
 USER flink
 COPY --chown=flink:flink infrastructure/docker/log4j-console.properties /opt/flink/conf/log4j-console.properties
 

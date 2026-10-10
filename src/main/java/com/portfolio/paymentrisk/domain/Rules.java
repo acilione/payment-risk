@@ -45,6 +45,11 @@ public final class Rules {
   }
 
   public static void validate(JsonNode r, AppConfig c) {
+    for (String field : List.of("version", "score", "window_seconds", "threshold", "updated_at"))
+      if (!r.path(field).isIntegralNumber() || !r.path(field).canConvertToLong())
+        throw new IllegalArgumentException("INVALID_RULE_CONFIGURATION");
+    if (!r.path("score").canConvertToInt())
+      throw new IllegalArgumentException("INVALID_RULE_CONFIGURATION");
     Type type;
     try {
       type = Type.valueOf(r.path("type").asText());

@@ -56,3 +56,16 @@ website-check:
 	npm --prefix web ci
 	npm --prefix web test
 	npm --prefix web run build
+
+.PHONY: simulate-customers
+simulate-customers:
+	python3 scripts/operations.py simulate-customers
+
+.PHONY: showcase showcase-stop showcase-export
+SHOWCASE_CONFIG ?= config/showcase.json
+showcase:
+	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG)
+showcase-stop:
+	python3 scripts/showcase.py stop
+showcase-export:
+	python3 scripts/showcase.py export
