@@ -41,11 +41,27 @@ type Report = {
 };
 const names: Record<string, string> = {
   normal: "Regular purchases",
+  known_devices: "Familiar phone and laptop",
+  checkout_retry: "Checkout retry",
   new_device: "Replacement phone",
   takeover: "Account takeover",
   card_testing: "Card testing",
   low_burst: "Small payment burst",
   trusted_device: "Familiar device misuse",
+};
+const descriptions: Record<string, string> = {
+  normal: "Everyday purchases from a familiar phone, spread across the day.",
+  known_devices: "An established phone and laptop used for ordinary purchases.",
+  checkout_retry:
+    "A declined checkout followed by a fresh attempt at the same merchant and amount.",
+  new_device: "A legitimate larger purchase after replacing a phone.",
+  takeover:
+    "Three large purchases from one unfamiliar device after ordinary activity.",
+  card_testing:
+    "Small declined attempts followed by a larger purchase on the same device.",
+  low_burst: "Several small payments in quick succession on a familiar device.",
+  trusted_device:
+    "Simulated misuse whose payment facts resemble ordinary activity.",
 };
 const commands =
   "make showcase\n# Open http://localhost:23001\nmake showcase-stop\n# Edit config/showcase.json, then run again";
@@ -297,7 +313,10 @@ export function Showcase({
           <section>
             <div className="showcase-section-heading">
               <h2>Investigate a generated customer</h2>
-              <p>Each example comes from this run.</p>
+              <p>
+                Each example comes from this run. Devices identify checkouts,
+                not bank login sessions.
+              </p>
             </div>
             <div className="showcase-examples">
               {examples.map((c) => (
@@ -308,6 +327,7 @@ export function Showcase({
                 >
                   <span>{c.payments} payments</span>
                   <strong>{names[c.profile] || c.profile}</strong>
+                  <p>{descriptions[c.profile]}</p>
                   <p>{c.id}</p>
                   <ArrowRight size={17} />
                 </button>

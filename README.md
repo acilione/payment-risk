@@ -51,7 +51,7 @@ make showcase
 
 This command creates local credentials in `.env`, builds the images, starts the services, submits the Flink job, generates payments and checks the stored results. The first build needs internet access and can take several minutes. It also handles schema registration and database initialization automatically.
 
-Open **http://localhost:23001** and select **Showcase**. Wait for the command to finish and the run status to become **COMPLETE**. With the checked-in configuration (seed `2`), expect **24 customers, 276 unique payments, 294 payment deliveries including retries, 297 archived records including 3 control records, and 276 stored decisions**. Click a customer example to inspect its payment timeline and rule evidence. The [showcase walkthrough](#showcase-walkthrough) explains which cases to present.
+Open **http://localhost:23001** and select **Showcase**. Wait for the command to finish and the run status to become **COMPLETE**. The checked-in configuration uses seed `7` and **40 customers**. The report must account for every payment delivery, including transport retries, and show one stored decision per unique payment. Click a customer example to inspect its payment timeline and rule evidence. The [showcase walkthrough](#showcase-walkthrough) explains which cases to present.
 
 The latest verification report is `artifacts/showcase/latest.json`. Each run also keeps its configuration, inputs, logs and reconciliation ledger under `artifacts/showcase/<run-id>/`. The live Overview includes retained decisions from earlier runs; Showcase identifies the selected run.
 
@@ -115,17 +115,34 @@ Stop the previous run before starting another configuration. A seed reproduces a
 
 | Setting in [config/showcase.json](config/showcase.json) | Default | Meaning |
 |---|---|---|
-| `seed` | `2` | Seed for customer histories and retry choices. |
-| `customers` | `24` | Number of generated customers; maximum 2,000. |
-| `min_payments` / `max_payments` | `8` / `14` | Payments per customer; supported range 7 to 100, at most 100,000 payments per run. |
-| `history_minutes` | `30` | Simulated history, 5 to 1,440 minutes. |
+| `seed` | `7` | Seed for customer histories and retry choices. |
+| `customers` | `40` | Number of generated customers; maximum 2,000. |
+| `min_payments` / `max_payments` | `7` / `10` | Payments per customer; supported range 7 to 100, at most 100,000 payments per run. |
+| `history_minutes` | `1440` | Simulated history, 5 to 1,440 minutes. |
 | `publish_rate` | `20` | Requested unique payments per second; synchronous Kafka acknowledgements can reduce the achieved rate. |
 | `retry_percent` | `10` | Probability of sending an additional byte-identical delivery. |
 | `ordinary_amount_min` / `ordinary_amount_max` | `250` / `15000` | Ordinary payment range, in euro cents. |
 | `large_amount_min` / `large_amount_max` | `80000` / `150000` | Large payment range, in euro cents. |
-| `profiles` | Six weighted behaviors | Integer sampling probabilities totaling 100; set a profile to 0 to disable it. |
+| `profiles` | Eight weighted behaviors | Integer sampling probabilities totaling 100; set a profile to 0 to disable it. |
 
-The generator models regular purchases, replacement devices, rapid attempts across devices, small declined attempts followed by a purchase, small payment bursts, and misuse of a familiar device. Merchant, amount, country, history length and timing vary. Some probe amounts and burst intervals are properties of these behavior models, rather than configuration fields. Labels describe simulated intent and are stored only in the run report; they are never sent to the risk engine. They are not evidence of actual fraud or measured fraud-detection accuracy.
+The showcase models online card authorization attempts for individual customers. `device_id` identifies the originating checkout device or browser; it does not represent an active bank login. `country` is the merchant country. Each customer stays in one country for this simulation and returns to a small group of merchants. Ordinary amounts favor the lower end of the configured range, and purchase times vary within chronological slots. The default generates 7 to 10 attempts over a day, with short sequences for selected behaviors.
+
+| Behavior | Weight | Generated sequence |
+|---|---|---|
+| `normal` | 45% | Ordinary purchases from a familiar phone, spaced across the day. |
+| `known_devices` | 10% | Purchases from a familiar phone and laptop. Neither device is treated as a simultaneous bank session. |
+| `checkout_retry` | 10% | A declined checkout followed 45 to 120 seconds later by an approved attempt with the same merchant, amount and device. Each attempt has a distinct transaction ID. |
+| `new_device` | 10% | Ordinary history followed by a larger purchase on a replacement phone. This legitimate case can trigger review. |
+| `takeover` | 10% | Ordinary history followed by three large purchases within 3 to 6 minutes from one unfamiliar device. |
+| `card_testing` | 5% | Four small declined attempts from one unfamiliar device, followed by a larger approved purchase. |
+| `low_burst` | 5% | Five small purchases close together on a familiar device. This exposes the limits of a frequency-only signal. |
+| `trusted_device` | 5% | A final purchase whose simulated intent is suspicious, but whose observable fields resemble ordinary activity. |
+
+The default mix is 75% legitimate customer profiles and 25% suspicious profiles, deliberately emphasizing investigation examples rather than estimating real fraud prevalence. Weights are sampling probabilities, so observed proportions vary by seed. The checked-in seed includes every behavior. Missing profile weights are treated as zero, and configured weights must total 100.
+
+These scenarios establish plausible sequences, not validated customer statistics. There is no random country hopping or device rotation on every attempt. Short custom histories compress sequence durations; probe amounts and sequence lengths belong to the behavior models. Labels describe simulated intent and remain outside the payment stream. The risk engine sees only payment facts, and a suspicious example need not trigger every rule or reach `REJECT`. Authorization status comes from the generated upstream event; the risk decision does not authorize or decline the purchase.
+
+Transport retries are separate from checkout retries: they resend the exact same event and transaction IDs, so all deliveries are archived while only one logical decision is retained.
 
 [GeneratedPayments](src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratedPayments.java) holds one pending payment per customer in a priority queue and merges histories chronologically. [ShowcaseProducer](src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java) serializes them as Avro and publishes them to Kafka. It does not call the risk evaluator. Business payments use one Kafka partition so compressed historical events cannot overtake each other across source splits; use the separate load benchmarks for throughput measurements.
 
@@ -413,7 +430,7 @@ Schema: [`transaction.avsc`](schemas/transaction.avsc).
 | `amount_minor` | `long` | Amount in cents, from 1 to 1,000,000,000,000 inclusive. |
 | `currency` | `string` | Must be `EUR`. |
 | `country` | `string` | Must be a country code in Java's ISO country list. |
-| `device_id` | `string` | Device reference; nonblank, at most 128 characters. |
+| `device_id` | `string` | Originating device reference; nonblank, at most 128 characters. The showcase uses a checkout device/browser identity, not a bank session. |
 | `status` | `PaymentStatus` enum | `APPROVED` or `DECLINED`, supplied by the payment source. |
 | `event_time` | `long`, `timestamp-millis` | Business event time. Must be positive and no more than five minutes ahead of validation time. |
 | `producer_time` | `long` | Producer-supplied timestamp. The risk calculation and event-time ordering do not use it; there is no additional range validation. |

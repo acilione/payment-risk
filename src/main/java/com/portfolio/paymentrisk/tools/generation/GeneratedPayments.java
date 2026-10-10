@@ -6,7 +6,7 @@ import java.util.*;
 
 /** A seeded customer model, merged chronologically with O(customers) pending records. */
 public final class GeneratedPayments implements Iterable<GeneratedPayments.Payment> {
-  public static final String VERSION = "customer-generator-v1";
+  public static final String VERSION = "customer-generator-v2";
 
   public record Customer(
       String id, String profile, int payments, long start, long end, long seed) {}
@@ -54,6 +54,13 @@ public final class GeneratedPayments implements Iterable<GeneratedPayments.Payme
     return customers.stream().mapToInt(Customer::payments).sum();
   }
 
+  private long ordinaryAmount(SplittableRandom random) {
+    // Everyday purchases are concentrated toward the lower end of the configured range.
+    return Math.min(
+        random.nextLong(config.ordinaryMin(), config.ordinaryMax() + 1),
+        random.nextLong(config.ordinaryMin(), config.ordinaryMax() + 1));
+  }
+
   public Iterator<Payment> iterator() {
     class Cursor {
       final Customer customer;
@@ -74,31 +81,66 @@ public final class GeneratedPayments implements Iterable<GeneratedPayments.Payme
         }
         int i = index++;
         boolean last = i == customer.payments() - 1;
-        boolean burst =
-            Set.of("takeover", "card_testing", "low_burst").contains(customer.profile());
+        // Only the final sequence changes behavior; earlier purchases establish a baseline.
+        int tail =
+            switch (customer.profile()) {
+              case "takeover" -> 3;
+              case "card_testing", "low_burst" -> 5;
+              case "checkout_retry" -> 2;
+              default -> 0;
+            };
+        int baseline = customer.payments() - tail;
+        boolean inSequence = tail > 0 && i >= baseline;
+        var habits = new SplittableRandom(customer.seed());
+        String country = List.of("IT", "FR", "DE", "ES").get(habits.nextInt(4));
+        int merchantBase = habits.nextInt(1, 31);
+        long sequenceMs =
+            switch (customer.profile()) {
+              case "takeover" -> habits.nextLong(180000, 360001);
+              case "card_testing" -> habits.nextLong(60000, 110001);
+              case "low_burst" -> habits.nextLong(45000, 90001);
+              case "checkout_retry" -> habits.nextLong(45000, 120001);
+              default -> 0;
+            };
+        sequenceMs = Math.min(sequenceMs, (customer.end() - customer.start()) / 3);
+        // Baseline ends before the final sequence; jitter stays inside non-overlapping slots.
+        long baselineEnd =
+            tail > 0
+                ? Math.max(customer.start() + 1, customer.end() - sequenceMs - 60000)
+                : customer.end();
+        long slot = (baselineEnd - customer.start()) / Math.max(1, baseline - 1);
         long t =
-            i == 0
-                ? customer.start()
-                : burst
-                    ? customer.end() - 100000 + (i - 1) * 100000L / (customer.payments() - 2)
-                    : customer.start()
-                        + i * (customer.end() - customer.start()) / (customer.payments() - 1);
-        long amount = random.nextLong(config.ordinaryMin(), config.ordinaryMax() + 1);
+            inSequence
+                ? customer.end() - sequenceMs + (i - baseline) * sequenceMs / (tail - 1)
+                : customer.start() + i * slot;
+        if (!inSequence && i > 0 && i < baseline - 1) t -= random.nextLong(Math.max(1, slot / 3));
+        long amount = ordinaryAmount(random);
         String device = customer.id() + "-phone", status = "APPROVED";
-        if (customer.profile().equals("takeover") && i > 0) {
+        String merchant = "merchant-" + country + "-" + (merchantBase + random.nextInt(4));
+        if (customer.profile().equals("known_devices") && i % 3 == 1)
+          device = customer.id() + "-laptop";
+        if (customer.profile().equals("takeover") && inSequence) {
           amount = random.nextLong(config.largeMin(), config.largeMax() + 1);
-          device = customer.id() + "-device-" + i;
-          status = i <= 4 ? "DECLINED" : "APPROVED";
+          device = customer.id() + "-unfamiliar";
+          merchant = "merchant-" + country + "-electronics";
         }
-        if (customer.profile().equals("card_testing") && i > 0) {
-          device = customer.id() + "-probe";
+        if (customer.profile().equals("card_testing") && inSequence) {
+          device = customer.id() + "-unfamiliar";
+          merchant = "merchant-" + country + "-online-" + ((i - baseline) % 2);
           amount =
               last
                   ? random.nextLong(config.largeMin(), config.largeMax() + 1)
                   : random.nextLong(50, 301);
           status = last ? "APPROVED" : "DECLINED";
         }
-        if (customer.profile().equals("low_burst") && i > 0) amount = random.nextLong(100, 701);
+        if (customer.profile().equals("low_burst") && inSequence)
+          amount = random.nextLong(100, 701);
+        if (customer.profile().equals("checkout_retry") && inSequence) {
+          // A fresh authorization attempt is a new transaction, unlike a transport redelivery.
+          amount = ordinaryAmount(new SplittableRandom(customer.seed() ^ 0x1234L));
+          merchant = "merchant-" + country + "-" + merchantBase;
+          status = last ? "APPROVED" : "DECLINED";
+        }
         if (customer.profile().equals("new_device") && last) {
           device = customer.id() + "-replacement";
           amount = random.nextLong(config.largeMin(), config.largeMax() + 1);
@@ -106,10 +148,10 @@ public final class GeneratedPayments implements Iterable<GeneratedPayments.Payme
         next =
             Json.object()
                 .put("customer_id", customer.id())
-                .put("merchant_id", "merchant-" + random.nextInt(1, 41))
+                .put("merchant_id", merchant)
                 .put("amount_minor", amount)
                 .put("currency", "EUR")
-                .put("country", List.of("IT", "FR", "DE", "ES").get(random.nextInt(4)))
+                .put("country", country)
                 .put("device_id", device)
                 .put("status", status)
                 .put("event_time", t)

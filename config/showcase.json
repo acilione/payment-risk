@@ -1,9 +1,9 @@
 {
-  "seed": 2,
-  "customers": 24,
-  "min_payments": 8,
-  "max_payments": 14,
-  "history_minutes": 30,
+  "seed": 7,
+  "customers": 40,
+  "min_payments": 7,
+  "max_payments": 10,
+  "history_minutes": 1440,
   "publish_rate": 20,
   "retry_percent": 10,
   "ordinary_amount_min": 250,
@@ -11,11 +11,13 @@
   "large_amount_min": 80000,
   "large_amount_max": 150000,
   "profiles": {
-    "normal": 55,
-    "new_device": 15,
-    "takeover": 15,
+    "normal": 45,
+    "new_device": 10,
+    "takeover": 10,
     "card_testing": 5,
     "low_burst": 5,
-    "trusted_device": 5
+    "trusted_device": 5,
+    "known_devices": 10,
+    "checkout_retry": 10
   }
 }

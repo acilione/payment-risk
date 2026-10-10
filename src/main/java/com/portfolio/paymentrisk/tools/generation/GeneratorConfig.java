@@ -17,7 +17,15 @@ public record GeneratorConfig(
     long largeMax,
     Map<String, Integer> profiles) {
   public static final List<String> PROFILES =
-      List.of("normal", "new_device", "takeover", "card_testing", "low_burst", "trusted_device");
+      List.of(
+          "normal",
+          "new_device",
+          "takeover",
+          "card_testing",
+          "low_burst",
+          "trusted_device",
+          "known_devices",
+          "checkout_retry");
 
   public static GeneratorConfig parse(JsonNode n) {
     var allowed =
@@ -51,7 +59,8 @@ public record GeneratorConfig(
               if (!PROFILES.contains(k))
                 throw new IllegalArgumentException("Unknown profile: " + k);
             });
-    for (var key : PROFILES) weights.put(key, (int) integer(profiles, key, 0, 100));
+    for (var key : PROFILES)
+      weights.put(key, profiles.has(key) ? (int) integer(profiles, key, 0, 100) : 0);
     if (weights.values().stream().mapToInt(x -> x).sum() != 100)
       throw new IllegalArgumentException("Profile weights must sum to 100");
     int customers = (int) integer(n, "customers", 1, 2000),

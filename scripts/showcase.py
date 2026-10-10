@@ -22,8 +22,10 @@ CLASS = "com.portfolio.paymentrisk.tools.ShowcaseProducer"
 JAR = "/opt/flink/usrlib/risk-engine.jar"
 PROFILES = {
     "normal": ("Regular purchases", "LEGITIMATE", "Purchases on a familiar device, spread across the history period."),
+    "known_devices": ("A familiar phone and laptop", "LEGITIMATE", "A customer uses an established phone and laptop for purchases spaced across the day. Multiple devices alone do not establish suspicious activity."),
+    "checkout_retry": ("A declined checkout, then success", "LEGITIMATE", "A declined purchase is followed by a fresh approved attempt at the same merchant, amount and device. Both authorizations are distinct transactions; transport retries retain the original transaction ID."),
     "new_device": ("A replacement phone", "LEGITIMATE", "A customer makes a larger purchase from a new device. The generated intent is legitimate; the rules only see the payment facts."),
-    "takeover": ("Rapid attempts across devices", "SUSPICIOUS", "A burst of large payments uses different devices, starting with declines and followed by approvals."),
+    "takeover": ("Large purchases from an unfamiliar device", "SUSPICIOUS", "After ordinary purchases on a familiar phone, three large purchases arrive within a few minutes from one unfamiliar device. This models possible account takeover, not simultaneous bank logins."),
     "card_testing": ("Small declines, then a purchase", "SUSPICIOUS", "Small declined attempts precede a larger approved payment on the same new device."),
     "low_burst": ("A burst below the score threshold", "SUSPICIOUS", "Several small payments arrive close together on a familiar device. Frequency alone may not reach the review threshold."),
     "trusted_device": ("Misuse of a familiar device", "SUSPICIOUS", "The final payment is labeled suspicious by the generator, but its observable fields resemble ordinary purchases. These rules cannot infer the hidden intent."),
