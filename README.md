@@ -6,6 +6,8 @@ The included producer generates synthetic EUR payments. The application calculat
 
 ## Contents
 
+- [Quick setup](#quick-setup)
+- [Quick start](#quick-start)
 - [Portfolio walkthrough](#portfolio-walkthrough)
 - [Technologies](#technologies)
 - [Processing flow](#processing-flow)
@@ -17,6 +19,66 @@ The included producer generates synthetic EUR payments. The application calculat
 - [Deployment](#deployment)
 - [Tests and CI](#tests-and-ci)
 - [Performance](#performance)
+
+## Quick setup
+
+Use **Linux or WSL2** with Git, Make, Python **3.10+**, and a running Docker daemon with **Docker Compose v2**. Allow at least **8 GB of available memory** and **15 GB of free disk space**. On Windows, run these commands inside WSL and keep the checkout in its Linux filesystem. Java, Maven and Node.js are supplied by the build containers for this setup; install them locally only for development and the separate test commands below.
+
+Check the required tools and Docker access:
+
+```bash
+git --version
+make --version
+python3 --version
+docker compose version
+docker info
+```
+
+Clone the branch containing the generator and Showcase page. If you already have that branch checked out, use its repository directory instead.
+
+```bash
+git clone --branch feat/production-plan https://github.com/acilione/payment-risk.git
+cd payment-risk
+```
+
+## Quick start
+
+From the repository directory:
+
+```bash
+make showcase
+```
+
+This command creates local credentials in `.env`, builds the images, starts the services, submits the Flink job, generates payments and checks the stored results. The first build needs internet access and can take several minutes. It also handles schema registration and database initialization automatically.
+
+Open **http://localhost:23001** and select **Showcase**. Wait for the command to finish and the run status to become **COMPLETE**. With the checked-in configuration (seed `2`), expect **24 customers, 276 unique payments, 294 payment deliveries including retries, 297 archived records including 3 control records, and 276 stored decisions**. Click a customer example to inspect its payment timeline and rule evidence. The [portfolio walkthrough](#portfolio-walkthrough) explains which cases to present.
+
+The latest verification report is `artifacts/showcase/latest.json`. Each run also keeps its configuration, inputs, logs and reconciliation ledger under `artifacts/showcase/<run-id>/`. The live Overview includes retained decisions from earlier runs; Showcase identifies the selected run.
+
+To stop:
+
+```bash
+make showcase-stop
+```
+
+Stopping saves Flink state before taking down a running job and preserves database, Kafka and object-storage volumes. To generate a different run:
+
+```bash
+# Run after stopping the previous showcase
+cp config/showcase.json config/my-showcase.json
+# Edit the copy: seed, customer count, amounts, publish rate or behavior weights
+make showcase SHOWCASE_CONFIG=config/my-showcase.json
+```
+
+| If setup stops | What to check |
+|---|---|
+| Docker is unavailable | Start Docker and confirm `docker info` works from the same Linux/WSL terminal. |
+| A showcase is already running | Open its dashboard, or finish/interrupt its command and run `make showcase-stop` before starting another. |
+| The regular `payment-risk` stack is running | Its ports overlap. If its Flink job is active, run `make stop-job`, then `make down`, before `make showcase`. |
+| Image builds or services fail | Check free disk space, available memory and the terminal output. Keep `.env` when reusing existing volumes. |
+| The run ends with `FAILED` | Inspect `artifacts/showcase/latest.json` and the run's `producer.log`. Inputs and volumes are retained for investigation. |
+
+The [Run locally](#run-locally) section covers manual service startup and development. Use the quick-start path above for the generated portfolio demonstration.
 
 ## Portfolio walkthrough
 
@@ -55,8 +117,8 @@ Stop the previous run before starting another configuration. A seed reproduces a
 |---|---|---|
 | `seed` | `2` | Seed for customer histories and retry choices. |
 | `customers` | `24` | Number of generated customers; maximum 2,000. |
-| `min_payments` / `max_payments` | `8` / `14` | Payments per customer; supported range 7?100, at most 100,000 payments per run. |
-| `history_minutes` | `30` | Simulated history, 5?1,440 minutes. |
+| `min_payments` / `max_payments` | `8` / `14` | Payments per customer; supported range 7 to 100, at most 100,000 payments per run. |
+| `history_minutes` | `30` | Simulated history, 5 to 1,440 minutes. |
 | `publish_rate` | `20` | Requested unique payments per second; synchronous Kafka acknowledgements can reduce the achieved rate. |
 | `retry_percent` | `10` | Probability of sending an additional byte-identical delivery. |
 | `ordinary_amount_min` / `ordinary_amount_max` | `250` / `15000` | Ordinary payment range, in euro cents. |
