@@ -6,6 +6,7 @@ The included producer generates synthetic EUR payments. The application calculat
 
 ## Contents
 
+- [Portfolio walkthrough](#portfolio-walkthrough)
 - [Technologies](#technologies)
 - [Processing flow](#processing-flow)
 - [Feature implementation](#feature-implementation)
@@ -16,6 +17,73 @@ The included producer generates synthetic EUR payments. The application calculat
 - [Deployment](#deployment)
 - [Tests and CI](#tests-and-ci)
 - [Performance](#performance)
+
+## Portfolio walkthrough
+
+Run a configurable simulation through the complete pipeline, then investigate its stored decisions. The payment values, customer histories, device changes and retries are generated from a seed; dashboard scores are calculated by Flink and read from ClickHouse.
+
+![Showcase dashboard with generator settings and reconciled pipeline counts](docs/images/showcase.png)
+
+```bash
+# Linux or WSL, with Docker Compose, Python 3.10+ and Make
+make showcase
+# Open http://localhost:23001 and select Showcase
+```
+
+The first run builds the images and starts an isolated `payment-risk-showcase` Compose project. Allow at least 8 GB of available memory and 15 GB of disk space. Its localhost ports match the regular stack, so stop that stack first if it is running. The command creates local credentials, starts a new Flink job with fresh topics and consumer groups, generates payments, and verifies their stored results. Subsequent runs reuse images and retained data volumes; existing payment inputs are never cleared.
+
+For a short presentation:
+
+1. Open **Showcase**. Show the seed, customer behavior mix, input archive count and decision count. Retry deliveries increase the archive count without creating extra logical decisions.
+2. Open **Account takeover** under the generated customer examples. Follow the payment timeline, inspect the score contributions, and expand the recorded policy and Kafka provenance.
+3. Open **Replacement phone** to explain a legitimate payment that the default rules send for review. Open **Familiar device misuse** to show what payment rules cannot infer from the available fields. These examples are selected from the generated run; a small custom run might not contain every behavior.
+4. Use **Overview** for totals and **Transactions** for filtering. Live screens read the retained database across runs; the Showcase report and its customer links identify one specific run.
+
+To change the simulation:
+
+```bash
+make showcase-stop                         # savepoint, then stop; retain volumes
+# Edit config/showcase.json
+make showcase
+# Or keep several configurations:
+make showcase SHOWCASE_CONFIG=config/my-showcase.json
+```
+
+Stop the previous run before starting another configuration. A seed reproduces amounts, relative timestamps, selected behaviors and retry choices. Each run gets fresh IDs and a current time anchor, so it can coexist with previous runs without identity conflicts. Event timestamps cover a compressed customer history; the publish rate controls delivery speed, not simulated elapsed time.
+
+| Setting in [config/showcase.json](config/showcase.json) | Default | Meaning |
+|---|---|---|
+| `seed` | `2` | Seed for customer histories and retry choices. |
+| `customers` | `24` | Number of generated customers; maximum 2,000. |
+| `min_payments` / `max_payments` | `8` / `14` | Payments per customer; supported range 7?100, at most 100,000 payments per run. |
+| `history_minutes` | `30` | Simulated history, 5?1,440 minutes. |
+| `publish_rate` | `20` | Requested unique payments per second; synchronous Kafka acknowledgements can reduce the achieved rate. |
+| `retry_percent` | `10` | Probability of sending an additional byte-identical delivery. |
+| `ordinary_amount_min` / `ordinary_amount_max` | `250` / `15000` | Ordinary payment range, in euro cents. |
+| `large_amount_min` / `large_amount_max` | `80000` / `150000` | Large payment range, in euro cents. |
+| `profiles` | Six weighted behaviors | Integer sampling probabilities totaling 100; set a profile to 0 to disable it. |
+
+The generator models regular purchases, replacement devices, rapid attempts across devices, small declined attempts followed by a purchase, small payment bursts, and misuse of a familiar device. Merchant, amount, country, history length and timing vary. Some probe amounts and burst intervals are properties of these behavior models, rather than configuration fields. Labels describe simulated intent and are stored only in the run report; they are never sent to the risk engine. They are not evidence of actual fraud or measured fraud-detection accuracy.
+
+[GeneratedPayments](src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratedPayments.java) holds one pending payment per customer in a priority queue and merges histories chronologically. [ShowcaseProducer](src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java) serializes them as Avro and publishes them to Kafka. It does not call the risk evaluator. Business payments use one Kafka partition so compressed historical events cannot overtake each other across source splits; use the separate load benchmarks for throughput measurements.
+
+After a source checkpoint covers the payments, the producer sends one control record per partition to advance event-time watermarks. These records use a reserved `showcase-control-` prefix, are included in the archive check and are excluded from the run's business-payment count. They allow the finite history to finish without changing the job's event-time behavior.
+
+[scripts/showcase.py](scripts/showcase.py) records acknowledged coordinates and payload hashes in a disk-backed SQLite ledger. It reads ClickHouse in pages of 200 decisions or 500 archived coordinates. A run is complete only when every acknowledged delivery, including retries and controls, has the expected archived bytes and every generated payment has exactly one logical decision with a matching input fingerprint. Missing data, conflicting evaluations or quarantined decisions fail verification. This checks this run's delivery and identity guarantees; it does not turn the single-broker local stack into a production deployment.
+
+Each run retains its configuration, acknowledged input log, producer log, ledger, verification report and bounded dashboard snapshot under `artifacts/showcase/<run-id>/`. Failed runs keep their evidence and services for inspection. `make showcase-stop` requests a savepoint before stopping a running job and never removes data volumes.
+
+To update the portable portfolio demo from a successful run:
+
+```bash
+make showcase-export
+npm --prefix web ci
+npm --prefix web run format
+VITE_DEMO_MODE=true npm --prefix web run build
+npm --prefix web run preview
+```
+
+The export includes at most 1,000 payments, preserving complete customer histories. The full run stays in ClickHouse and the local ledger. The committed [snapshot](web/src/showcase-data.json) contains actual stored decisions, source coordinates, policy evidence, generator configuration and verification counts. Overview, Transactions and Investigations use this same snapshot in static mode; they do not recalculate scores in the browser. The static site clearly identifies the saved run and does not claim live service health.
 
 ## Technologies
 
@@ -191,7 +259,7 @@ The API also reads Flink REST for the running job and latest checkpoint, and Pro
 
 [web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview–window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
 
-The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) derives totals and charts from the shared customer-scenario fixture. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
+The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) derives totals and charts from the shared, exported pipeline snapshot. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
 
 ### Customer investigations
 
@@ -201,7 +269,7 @@ The **Investigations** section provides customer-ID prefix search, a decision fi
 
 The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
 
-The static demo offers three guided investigations: rapid attempts across devices, a legitimate replacement phone that triggers review, and a stolen trusted device that the rules miss. It includes all nine customer stories and 36 payments from the existing scenario dataset. [InvestigationFixtureTest](src/test/java/com/portfolio/paymentrisk/InvestigationFixtureTest.java) evaluates those inputs with the Java engine and checks the bundled fixture. Labels remain separate from engine inputs. To regenerate reviewed fixture changes, run `mvn -Dtest=InvestigationFixtureTest -Drisk.fixture.write=true test`, then format the website. Overview, Transactions and Investigations share this fixture. Demo totals, rule counts and charts are calculated from its decisions; demo time windows use payment event time, while live overview windows use processing time. Static service telemetry and checkpoints are displayed as unmeasured.
+The static demo uses a verified generator run exported from ClickHouse, with customer examples selected by behavior. Labels remain separate from engine inputs. Overview, Transactions and Investigations share the exported decisions; totals, rule counts and charts are derived from those records. Demo time windows use payment event time, while live overview windows use processing time. Static service telemetry and checkpoints are displayed as unmeasured. The earlier authored scenarios and `InvestigationFixtureTest` remain regression tests; they no longer supply the portfolio dashboard. See [Portfolio walkthrough](#portfolio-walkthrough) for generation and export commands.
 
 ### Metrics and alerts
 

@@ -51,12 +51,18 @@ async function read<T>(path: string, signal: AbortSignal): Promise<T> {
     throw new Error("Unavailable");
   return response.json();
 }
-export function Investigations({ demo }: { demo: boolean }) {
+export function Investigations({
+  demo,
+  initialCustomer = "",
+}: {
+  demo: boolean;
+  initialCustomer?: string;
+}) {
   const [query, setQuery] = useState("");
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [customers, setCustomers] = useState<CustomerPage | null>(null);
-  const [customer, setCustomer] = useState("");
+  const [customer, setCustomer] = useState(initialCustomer);
   const [timeline, setTimeline] = useState<TimelinePage | null>(null);
   const [selected, setSelected] = useState<InvestigationDecision | null>(null);
   const [customerCursor, setCustomerCursor] = useState("");
@@ -141,37 +147,25 @@ export function Investigations({ demo }: { demo: boolean }) {
       </div>
       {demo && (
         <section className="scenario-grid" aria-label="Guided investigations">
-          {[
-            {
-              id: "account-takeover",
-              title: "Rapid attempts across devices",
-              tag: "Detected pattern",
-              text: "Four declines, new devices, then approvals.",
-            },
-            {
-              id: "new-phone",
-              title: "A legitimate replacement phone",
-              tag: "False alarm",
-              text: "Why a normal purchase received a review.",
-            },
-            {
-              id: "stolen-trusted-device",
-              title: "A familiar device, a missed signal",
-              tag: "Missed detection",
-              text: "Why a suspicious payment scored zero.",
-            },
-          ].map((s) => (
-            <button
-              className={`scenario-card ${customer === "demo-" + s.id ? "chosen" : ""}`}
-              key={s.id}
-              onClick={() => open("demo-" + s.id)}
-            >
-              <span>{s.tag}</span>
-              <strong>{s.title}</strong>
-              <p>{s.text}</p>
-              <ArrowRight size={17} />
-            </button>
-          ))}
+          {stories
+            .filter(
+              (s, index, cases) =>
+                ["takeover", "new_device", "trusted_device"].includes(
+                  s.profile,
+                ) && cases.findIndex((c) => c.profile === s.profile) === index,
+            )
+            .map((s) => (
+              <button
+                className={`scenario-card ${customer === s.target_payment.customer_id ? "chosen" : ""}`}
+                key={s.scenario}
+                onClick={() => open(s.target_payment.customer_id)}
+              >
+                <span>{s.outcome.replaceAll("_", " ").toLowerCase()}</span>
+                <strong>{s.title}</strong>
+                <p>{s.story}</p>
+                <ArrowRight size={17} />
+              </button>
+            ))}
         </section>
       )}
       <div className="investigation-workspace">
@@ -186,7 +180,7 @@ export function Investigations({ demo }: { demo: boolean }) {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. demo-new-phone"
+                placeholder="e.g. show-"
                 maxLength={256}
               />
             </label>

@@ -129,3 +129,32 @@ test("conflicting or quarantined decisions prevent publishing analytical totals"
   );
   await assert.rejects(reader("1h"), /integrity requires review/);
 });
+
+test("showcase serves only the configured report and handles missing reports", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = await mkdtemp(join(tmpdir(), "payment-showcase-"));
+  const path = join(dir, "latest.json");
+  const app = await buildApp({ showcasePath: path });
+  try {
+    assert.equal((await app.inject("/api/showcase")).statusCode, 503);
+    await writeFile(
+      path,
+      JSON.stringify({
+        run_id: "show-test",
+        status: "COMPLETE",
+        stored_decisions: 251,
+      }),
+    );
+    const result = await app.inject("/api/showcase?path=/etc/passwd");
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.json().run_id, "show-test");
+    assert.equal(result.headers["cache-control"], "no-store");
+    await writeFile(path, "malformed");
+    assert.equal((await app.inject("/api/showcase")).statusCode, 503);
+  } finally {
+    await app.close();
+    await rm(dir, { recursive: true });
+  }
+});

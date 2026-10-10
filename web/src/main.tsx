@@ -21,6 +21,7 @@ import {
   Layers3,
   LayoutDashboard,
   Menu,
+  Play,
   Radio,
   RefreshCw,
   Search,
@@ -35,6 +36,7 @@ import type { Decision, Overview, WindowKey } from "./types";
 import { demoOverview, ruleCatalog } from "./demo";
 import "./style.css";
 import { Investigations } from "./Investigations";
+import { Showcase } from "./Showcase";
 
 const staticDemo = import.meta.env.VITE_DEMO_MODE === "true";
 const github = "https://github.com/acilione/payment-risk";
@@ -59,6 +61,7 @@ const label = { APPROVE: "Approved", REVIEW: "Review", REJECT: "Rejected" };
 
 function App() {
   const [tab, setTab] = useState("Overview");
+  const [investigationCustomer, setInvestigationCustomer] = useState("");
   const [demo, setDemo] = useState(import.meta.env.VITE_DEMO_MODE === "true");
   const [window, setWindow] = useState<WindowKey>("24h");
   const [data, setData] = useState<Overview | null>(() =>
@@ -102,7 +105,7 @@ function App() {
       setLoading(false);
       return;
     }
-    if (tab === "Investigations") {
+    if (tab === "Investigations" || tab === "Showcase") {
       setLoading(false);
       setError("");
       return;
@@ -176,6 +179,7 @@ function App() {
   const nav = (name: string) => {
     setTab(name);
     setMenu(false);
+    globalThis.scrollTo(0, 0);
   };
   return (
     <div className="app-shell">
@@ -211,6 +215,7 @@ function App() {
         <nav aria-label="Main navigation">
           {[
             [LayoutDashboard, "Overview"],
+            [Play, "Showcase"],
             [ArrowDownLeft, "Transactions"],
             [Search, "Investigations"],
             [ShieldCheck, "Risk rules"],
@@ -304,11 +309,13 @@ function App() {
                   ? "Payment totals, risk decisions, and service status."
                   : tab === "Transactions"
                     ? "Search payment decisions and review their scores and matched rules."
-                    : tab === "Investigations"
-                      ? "Customer histories, recorded evidence, and decisions to review."
-                      : tab === "Risk rules"
-                        ? "Default rules, score weights, and decision thresholds."
-                        : "How payments are processed, stored, and recovered after a restart."}
+                    : tab === "Showcase"
+                      ? "Generate customer payments and follow a verified pipeline run."
+                      : tab === "Investigations"
+                        ? "Customer histories, recorded evidence, and decisions to review."
+                        : tab === "Risk rules"
+                          ? "Default rules, score weights, and decision thresholds."
+                          : "How payments are processed, stored, and recovered after a restart."}
               </p>
             </div>
             <div className="heading-actions">
@@ -348,9 +355,10 @@ function App() {
             <div className="demo-banner">
               <span>
                 <Database size={15} />
-                <strong>Demo data</strong>
+                <strong>Saved pipeline run</strong>
                 <span>
-                  All payment screens use the same synthetic scenarios.
+                  Generated payments from a verified Kafka, Flink and ClickHouse
+                  run.
                 </span>
               </span>
               <button
@@ -388,8 +396,22 @@ function App() {
               </button>
             </div>
           )}
+          {tab === "Showcase" && (
+            <Showcase
+              key={String(demo)}
+              demo={demo}
+              investigate={(id) => {
+                setInvestigationCustomer(id);
+                nav("Investigations");
+              }}
+            />
+          )}
           {tab === "Investigations" && (
-            <Investigations key={String(demo)} demo={demo} />
+            <Investigations
+              key={String(demo)}
+              demo={demo}
+              initialCustomer={investigationCustomer}
+            />
           )}
           {(tab === "Overview" || tab === "Transactions") && (
             <>
@@ -791,7 +813,7 @@ function App() {
                   <span>
                     <CheckCheck size={13} />{" "}
                     {demo
-                      ? "Sample transactions"
+                      ? "Generated payment decisions"
                       : "One decision per transaction"}
                   </span>
                   <span>

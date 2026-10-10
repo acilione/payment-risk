@@ -1,4 +1,4 @@
-import fixture from "./investigation-fixture.json";
+import fixture from "./showcase-data";
 import type {
   CustomerSummary,
   InvestigationDecision,
@@ -12,7 +12,7 @@ export const demoDecisions = stories.flatMap((story) =>
 export const demoEventTime = Math.max(
   ...demoDecisions.map((decision) => decision.event_time),
 );
-const generatedAt = "2026-10-09T10:00:20.000Z";
+const generatedAt = fixture.provenance.updated_at;
 const summary = (story: (typeof stories)[number]): CustomerSummary => ({
   customer_id: story.target_payment.customer_id,
   payments: story.timeline.length,

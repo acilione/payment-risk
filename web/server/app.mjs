@@ -4,12 +4,14 @@ import rateLimit from "@fastify/rate-limit";
 import staticFiles from "@fastify/static";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { createReader } from "./overview.mjs";
 import { createInvestigationReader, decodeCursor } from "./investigation.mjs";
 
 export async function buildApp({
   reader,
   investigationReader,
+  showcasePath = process.env.SHOWCASE_REPORT,
   logger = false,
 } = {}) {
   const app = Fastify({ logger, bodyLimit: 1024 });
@@ -87,6 +89,20 @@ export async function buildApp({
       },
     );
   }
+  app.get("/api/showcase", async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    if (!showcasePath)
+      return reply.code(404).send({ error: "Start a run with make showcase." });
+    try {
+      if ((await stat(showcasePath)).size > 2 * 1024 * 1024)
+        throw new Error("Report too large");
+      return JSON.parse(await readFile(showcasePath, "utf8"));
+    } catch {
+      return reply
+        .code(503)
+        .send({ error: "Showcase report is not available yet." });
+    }
+  });
   const cache = new Map();
   app.get("/api/health", async () => ({ status: "ok" }));
   app.get(

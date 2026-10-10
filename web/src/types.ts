@@ -13,7 +13,7 @@ export interface Decision {
   event_time: number;
   processed_at: number;
   source_partition?: number;
-  source_offset?: number;
+  source_offset?: number | string;
 }
 export interface Overview {
   generatedAt: string;
