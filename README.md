@@ -8,7 +8,7 @@ The included producer generates synthetic EUR payments. The application calculat
 
 - [Quick setup](#quick-setup)
 - [Quick start](#quick-start)
-- [Portfolio walkthrough](#portfolio-walkthrough)
+- [Showcase walkthrough](#showcase-walkthrough)
 - [Technologies](#technologies)
 - [Processing flow](#processing-flow)
 - [Feature implementation](#feature-implementation)
@@ -22,7 +22,7 @@ The included producer generates synthetic EUR payments. The application calculat
 
 ## Quick setup
 
-Use **Linux or WSL2** with Git, Make, Python **3.10+**, and a running Docker daemon with **Docker Compose v2**. Allow at least **8 GB of available memory** and **15 GB of free disk space**. On Windows, run these commands inside WSL and keep the checkout in its Linux filesystem. Java, Maven and Node.js are supplied by the build containers for this setup; install them locally only for development and the separate test commands below.
+Install Git, Make and Python **3.10+**, and ensure Docker is running with **Docker Compose v2** available. Allow at least **8 GB of available memory** and **15 GB of free disk space**. Java, Maven and Node.js are supplied by the build containers for this setup; install them locally only for development and the separate test commands below.
 
 Check the required tools and Docker access:
 
@@ -51,7 +51,7 @@ make showcase
 
 This command creates local credentials in `.env`, builds the images, starts the services, submits the Flink job, generates payments and checks the stored results. The first build needs internet access and can take several minutes. It also handles schema registration and database initialization automatically.
 
-Open **http://localhost:23001** and select **Showcase**. Wait for the command to finish and the run status to become **COMPLETE**. With the checked-in configuration (seed `2`), expect **24 customers, 276 unique payments, 294 payment deliveries including retries, 297 archived records including 3 control records, and 276 stored decisions**. Click a customer example to inspect its payment timeline and rule evidence. The [portfolio walkthrough](#portfolio-walkthrough) explains which cases to present.
+Open **http://localhost:23001** and select **Showcase**. Wait for the command to finish and the run status to become **COMPLETE**. With the checked-in configuration (seed `2`), expect **24 customers, 276 unique payments, 294 payment deliveries including retries, 297 archived records including 3 control records, and 276 stored decisions**. Click a customer example to inspect its payment timeline and rule evidence. The [showcase walkthrough](#showcase-walkthrough) explains which cases to present.
 
 The latest verification report is `artifacts/showcase/latest.json`. Each run also keeps its configuration, inputs, logs and reconciliation ledger under `artifacts/showcase/<run-id>/`. The live Overview includes retained decisions from earlier runs; Showcase identifies the selected run.
 
@@ -72,7 +72,7 @@ make showcase SHOWCASE_CONFIG=config/my-showcase.json
 
 | If setup stops | What to check |
 |---|---|
-| Docker is unavailable | Start Docker and confirm `docker info` works from the same Linux/WSL terminal. |
+| Docker is unavailable | Start Docker and confirm `docker info` works from the same terminal. |
 | A showcase is already running | Open its dashboard, or finish/interrupt its command and run `make showcase-stop` before starting another. |
 | The regular `payment-risk` stack is running | Its ports overlap. If its Flink job is active, run `make stop-job`, then `make down`, before `make showcase`. |
 | Image builds or services fail | Check free disk space, available memory and the terminal output. Keep `.env` when reusing existing volumes. |
@@ -80,14 +80,14 @@ make showcase SHOWCASE_CONFIG=config/my-showcase.json
 
 The [Run locally](#run-locally) section covers manual service startup and development. Use the quick-start path above for the generated portfolio demonstration.
 
-## Portfolio walkthrough
+## Showcase walkthrough
 
 Run a configurable simulation through the complete pipeline, then investigate its stored decisions. The payment values, customer histories, device changes and retries are generated from a seed; dashboard scores are calculated by Flink and read from ClickHouse.
 
 ![Showcase dashboard with generator settings and reconciled pipeline counts](docs/images/showcase.png)
 
 ```bash
-# Linux or WSL, with Docker Compose, Python 3.10+ and Make
+# Requires Docker Compose, Python 3.10+ and Make
 make showcase
 # Open http://localhost:23001 and select Showcase
 ```
@@ -331,7 +331,7 @@ The **Investigations** section provides customer-ID prefix search, a decision fi
 
 The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
 
-The static demo uses a verified generator run exported from ClickHouse, with customer examples selected by behavior. Labels remain separate from engine inputs. Overview, Transactions and Investigations share the exported decisions; totals, rule counts and charts are derived from those records. Demo time windows use payment event time, while live overview windows use processing time. Static service telemetry and checkpoints are displayed as unmeasured. The earlier authored scenarios and `InvestigationFixtureTest` remain regression tests; they no longer supply the portfolio dashboard. See [Portfolio walkthrough](#portfolio-walkthrough) for generation and export commands.
+The static demo uses a verified generator run exported from ClickHouse, with customer examples selected by behavior. Labels remain separate from engine inputs. Overview, Transactions and Investigations share the exported decisions; totals, rule counts and charts are derived from those records. Demo time windows use payment event time, while live overview windows use processing time. Static service telemetry and checkpoints are displayed as unmeasured. The earlier authored scenarios and `InvestigationFixtureTest` remain regression tests; they no longer supply the portfolio dashboard. See [Showcase walkthrough](#showcase-walkthrough) for generation and export commands.
 
 ### Metrics and alerts
 
@@ -544,7 +544,7 @@ Values use Confluent-compatible framing: a zero magic byte, a four-byte schema I
 
 ## Run locally
 
-Use Linux or WSL with Docker Compose, Python 3, Java 17 or later, Maven, and Make. Containers use Java 21. Allow at least 8 GB of available memory and approximately 15 GB of disk space for images, build cache, and data. On WSL, check free space on both the Windows host and Linux filesystem.
+Install Docker Compose, Python 3, Java 17 or later, Maven, and Make. Containers use Java 21. Allow at least 8 GB of available memory and approximately 15 GB of disk space for images, build cache, and data.
 
 ```bash
 make test
