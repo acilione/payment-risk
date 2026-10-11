@@ -14,6 +14,26 @@ export type ShowcaseReport = {
   decision_counts?: Record<string, number>;
   verification?: string;
   error?: string;
+  storage_unavailable?: boolean;
+  reconciliation?: {
+    checked_at: string;
+    verified: boolean;
+    scope: string;
+    archived: number;
+    evaluated: number;
+    missing_archive: number;
+    without_decision: number;
+    missing_payment_examples?: string[];
+    missing_input_examples?: { partition: number; offset: string }[];
+  };
+  recovery?: {
+    stage: string;
+    acknowledged_during_outage?: number;
+    resume_in_seconds?: number;
+    offsets_unchanged?: boolean;
+    verification?: string;
+    replay?: { records: number; status: string };
+  };
   config: {
     seed: number;
     customers: number;

@@ -50,5 +50,28 @@ class ReconciliationTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Missing logical decisions"):
                 showcase.reconcile(self.db, self.report)
 
+    def test_partial_reconciliation_reports_missing_coordinates_and_payments(self):
+        with patch.object(showcase, "sql", side_effect=[self.archived[:1], [], []]):
+            self.assertEqual(showcase.reconcile(self.db, self.report, require_complete=False), (1, 0))
+        check = self.report["reconciliation"]
+        self.assertEqual(check["missing_archive"], 1)
+        self.assertEqual(check["without_decision"], 1)
+        self.assertEqual(check["missing_input_examples"], [{"partition": 0, "offset": "1"}])
+        self.assertEqual(check["missing_payment_examples"], [self.payment["event_id"]])
+
+    def test_reconciliation_can_resume_without_counting_previous_observations_twice(self):
+        for _ in range(2):
+            with patch.object(showcase, "sql", side_effect=[self.archived, [], [self.decision], []]):
+                self.assertEqual(showcase.reconcile(self.db, self.report), (2, 1))
+        self.assertEqual(self.report["reconciliation"]["without_decision"], 0)
+
+    def test_offset_comparison_allows_initialization_but_never_consumption(self):
+        before = {"archive": [{"topic": "raw", "partition": 0, "committed": -1}]}
+        during = {"archive": [{"topic": "raw", "partition": 0, "committed": 0}]}
+        showcase.assert_offsets_unchanged(before, during)
+        during["archive"][0]["committed"] = 1
+        with self.assertRaisesRegex(AssertionError, "committed offsets"):
+            showcase.assert_offsets_unchanged(before, during)
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ import { useJsonResource } from "../../hooks/useJsonResource";
 import { profiles } from "./profiles";
 import { RunConfiguration } from "./RunConfiguration";
 import { RunInstructions } from "./RunInstructions";
+import { Reconciliation } from "./Reconciliation";
 import type { ShowcaseReport } from "./types";
 import snapshot from "../../showcase-data";
 import "../../showcase.css";
@@ -135,6 +136,7 @@ export function Showcase({
               {report.error}
             </p>
           )}
+          <Reconciliation report={report} />
           <div className="showcase-columns">
             <RunConfiguration config={report.config} />
             <section className="card showcase-results">

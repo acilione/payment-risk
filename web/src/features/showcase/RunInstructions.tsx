@@ -14,6 +14,12 @@ export function RunInstructions() {
           in the dashboard.
         </p>
         <p className="showcase-note">
+          To demonstrate recovery, stop the current run and use{" "}
+          <code>make showcase-recovery</code>. The database stops during payment
+          generation, restarts automatically, and the run checks stored inputs
+          and replays decisions. Follow the progress above.
+        </p>
+        <p className="showcase-note">
           History is published in chronological order on one Kafka partition.
           This presentation workflow is not a distributed throughput benchmark.
           Stopping retains data volumes and a Flink savepoint.

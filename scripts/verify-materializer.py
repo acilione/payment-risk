@@ -97,7 +97,11 @@ try:
     def insert(*values):
         sql('INSERT INTO ' + name + '.evaluations FORMAT JSONEachRow\n' + '\n'.join(json.dumps(v) for v in values))
     def count(view):
-        return int(rows('SELECT count() AS n FROM ' + name + '.' + view)[0]['n'])
+        actual = int(rows('SELECT count() AS n FROM ' + name + '.' + view)[0]['n'])
+        if view == 'decisions_current':
+            for serving in ('decisions_summary',):
+                assert int(rows('SELECT count() AS n FROM ' + name + '.' + serving)[0]['n']) == actual, serving
+        return actual
     insert(base, base, dict(base, source_partition=3, source_offset=1, processed_at=9000))
     assert count('evaluations') == 3 and count('decisions_current') == 1
     assert int(rows('SELECT sum(amount_minor) AS n FROM ' + name + '.decisions_current')[0]['n']) == 100
@@ -110,6 +114,18 @@ try:
     # A corrupt identity pointing at another transaction must invalidate both transactions.
     insert(dict(base, transaction_id='tx3'))
     assert count('integrity_conflicts') == 3 and count('decisions_current') == 0
+    # Filtering by customer must not hide the other half of a conflicting identity.
+    insert(dict(base, customer_id='another-customer', transaction_id='tx4'))
+    assert count('integrity_conflicts') == 4 and count('decisions_current') == 0
+    for serving in ('decisions_summary',):
+        assert not rows("SELECT * FROM " + name + "." + serving + " WHERE customer_id='another-customer'")
+    # Evidence-only changes must still invalidate a row even though summaries omit those fields.
+    for field in ('policy_snapshot', 'rule_evidence'):
+        candidate = dict(base, evaluation_id='eval-' + field, event_id='event-' + field, transaction_id='tx-' + field)
+        insert(candidate)
+        assert count('decisions_current') == 1
+        insert({**candidate, field: '{"changed":true}'})
+        assert count('decisions_current') == 0
 finally:
     sql('DROP DATABASE IF EXISTS ' + name)
 

@@ -34,25 +34,54 @@ SELECT evaluation_id,
 FROM risk.evaluations GROUP BY evaluation_id;
 -- No lifecycle/revision contract exists in v1. Multiple evaluations for a transaction require review.
 -- Work from raw deliveries so a conflicting evaluation cannot conceal another transaction_id.
+CREATE OR REPLACE VIEW risk.evaluation_conflicts AS
+SELECT evaluation_id FROM risk.evaluations
+GROUP BY evaluation_id
+HAVING uniqExact(tuple(decision_id,event_id,transaction_id,customer_id,amount_minor,currency,risk_score,decision,
+  matched_rules,reason_codes,rules_fingerprint,event_time,engine_version,policy_id,policy_version,policy_snapshot,rule_evidence,input_sha256)) > 1;
 CREATE OR REPLACE VIEW risk.transaction_integrity AS
 SELECT transaction_id, uniqExact(evaluation_id) AS evaluations,
-  max(content_variants) AS content_variants
-FROM risk.evaluations AS d
-INNER JOIN risk.evaluations_logical AS l USING evaluation_id
+  1 + max(evaluation_id IN (SELECT evaluation_id FROM risk.evaluation_conflicts)) AS content_variants
+FROM risk.evaluations
 GROUP BY transaction_id;
-CREATE OR REPLACE VIEW risk.decisions_current AS
-SELECT evaluation_id, row.1 AS decision_id, row.2 AS event_id, row.3 AS transaction_id,
-  row.4 AS customer_id, row.5 AS amount_minor, row.6 AS currency, row.7 AS risk_score,
-  row.8 AS decision, row.9 AS matched_rules, row.10 AS reason_codes,
-  row.11 AS rules_fingerprint, row.12 AS event_time, row.13 AS processed_at,
-  row.14 AS source_partition, row.15 AS source_offset, row.16 AS source_topic,
-  row.17 AS engine_version, row.18 AS policy_id, row.19 AS policy_version,
-  row.20 AS policy_snapshot, row.21 AS rule_evidence, row.22 AS input_sha256
-FROM risk.evaluations_logical
-WHERE content_variants = 1 AND row.3 IN
-  (SELECT transaction_id FROM risk.transaction_integrity WHERE evaluations = 1 AND content_variants = 1);
 CREATE OR REPLACE VIEW risk.integrity_conflicts AS
 SELECT * FROM risk.transaction_integrity WHERE evaluations > 1 OR content_variants > 1;
+-- Group keys let customer and event-ID predicates apply before full evidence aggregation.
+CREATE OR REPLACE VIEW risk.decisions_current AS
+SELECT evaluation_id, event_id, customer_id, event_time,
+  row.1 AS decision_id, row.2 AS transaction_id, row.3 AS amount_minor,
+  row.4 AS currency, row.5 AS risk_score, row.6 AS decision, row.7 AS matched_rules,
+  row.8 AS reason_codes, row.9 AS rules_fingerprint, row.10 AS processed_at,
+  row.11 AS source_partition, row.12 AS source_offset, row.13 AS source_topic,
+  row.14 AS engine_version, row.15 AS policy_id, row.16 AS policy_version,
+  row.17 AS policy_snapshot, row.18 AS rule_evidence, row.19 AS input_sha256
+FROM (
+  SELECT evaluation_id, event_id, customer_id, event_time,
+    argMin(tuple(decision_id,transaction_id,amount_minor,currency,risk_score,decision,
+      matched_rules,reason_codes,rules_fingerprint,processed_at,source_partition,
+      source_offset,source_topic,engine_version,policy_id,policy_version,policy_snapshot,rule_evidence,input_sha256),
+      tuple(processed_at,source_topic,source_partition,source_offset)) AS row
+  FROM risk.evaluations
+  WHERE transaction_id NOT IN (SELECT transaction_id FROM risk.integrity_conflicts)
+  GROUP BY customer_id, event_time, event_id, evaluation_id
+);
+-- Small analytical rows avoid aggregating policy snapshots and evidence for charts and counts.
+-- No precomputed sums: each query resolves retries before counting business payments.
+CREATE OR REPLACE VIEW risk.decisions_summary AS
+SELECT evaluation_id, customer_id, event_time,
+  row.1 AS transaction_id, row.2 AS event_id, row.3 AS amount_minor,
+  row.4 AS risk_score, row.5 AS decision, row.6 AS matched_rules,
+  row.7 AS reason_codes, row.8 AS rules_fingerprint, row.9 AS processed_at,
+  row.10 AS source_partition, row.11 AS source_offset
+FROM (
+  SELECT evaluation_id, customer_id, event_time,
+    argMin(tuple(transaction_id,event_id,amount_minor,risk_score,decision,matched_rules,
+      reason_codes,rules_fingerprint,processed_at,source_partition,source_offset),
+      tuple(processed_at,source_topic,source_partition,source_offset)) AS row
+  FROM risk.evaluations
+  WHERE transaction_id NOT IN (SELECT transaction_id FROM risk.integrity_conflicts)
+  GROUP BY customer_id, event_time, evaluation_id
+);
 CREATE TABLE IF NOT EXISTS risk.materializer_rejections (
   source_topic LowCardinality(String), source_partition UInt32, source_offset UInt64,
   source_timestamp Int64, error_code LowCardinality(String), payload_sha256 String,

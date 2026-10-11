@@ -47,9 +47,9 @@ jobs:
       - name: Configurable generator through the full pipeline
         run: |
           docker compose down
-          python3 scripts/showcase.py run --no-build
           pip install playwright==1.62.0
           python3 -m playwright install --with-deps chromium
+          python3 scripts/verify-showcase-recovery.py
           python3 scripts/verify-website.py --url http://127.0.0.1:23001/
           make showcase-stop
       - if: always()

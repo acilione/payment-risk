@@ -34,16 +34,16 @@ export function createReader(
     const [totals, series, rules, decisions, cluster, metrics, integrity] =
       await Promise.allSettled([
         sql(
-          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_current WHERE ${where}`,
+          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_summary WHERE ${where}`,
         ),
         sql(
-          `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_current WHERE ${where} GROUP BY time ORDER BY time`,
+          `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_summary WHERE ${where} GROUP BY time ORDER BY time`,
         ),
         sql(
-          `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_current WHERE ${where} GROUP BY id ORDER BY id`,
+          `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_summary WHERE ${where} GROUP BY id ORDER BY id`,
         ),
         sql(
-          `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_current WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
+          `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_summary WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
         ),
         json(flink + "/jobs/overview"),
         json(

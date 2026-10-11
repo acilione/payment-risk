@@ -65,7 +65,7 @@ export function createInvestigationReader(
       const after = decodeCursor(cursor, "customers");
       await integrity();
       const rows = await sql(
-        `SELECT ${summary} FROM risk.decisions_current WHERE startsWith(customer_id, {q:String}) AND customer_id > {after:String} GROUP BY customer_id HAVING {decision:String} = 'ALL' OR countIf(decision = {decision:String}) > 0 ORDER BY customer_id LIMIT 21`,
+        `SELECT ${summary} FROM risk.decisions_summary WHERE startsWith(customer_id, {q:String}) AND customer_id > {after:String} GROUP BY customer_id HAVING {decision:String} = 'ALL' OR countIf(decision = {decision:String}) > 0 ORDER BY customer_id LIMIT 21`,
         { q, after: after?.id || "", decision },
       );
       const items = rows.slice(0, pageSize).map(normalize);
@@ -87,7 +87,7 @@ export function createInvestigationReader(
         id: after?.id || "",
       };
       const totals = await sql(
-        `SELECT ${summary} FROM risk.decisions_current WHERE customer_id = {customer:String} GROUP BY customer_id`,
+        `SELECT ${summary} FROM risk.decisions_summary WHERE customer_id = {customer:String} GROUP BY customer_id`,
         parameters,
       );
       const rows = await sql(

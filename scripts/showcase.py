@@ -82,12 +82,14 @@ def ledger(path):
         CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, customer TEXT, hash TEXT, payload TEXT, decision TEXT);
         CREATE INDEX IF NOT EXISTS payments_customer ON payments(customer);
     """)
+    if "archived" not in {row[1] for row in db.execute("PRAGMA table_info(inputs)")}:
+        db.execute("ALTER TABLE inputs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
     return db
 
 def record(db, row):
     if row["kind"] not in ("payment", "marker"):
         return
-    db.execute("INSERT INTO inputs VALUES(?,?,?)", (row["source_partition"], row["source_offset"], row["payload_sha256"]))
+    db.execute("INSERT INTO inputs(partition,offset,hash) VALUES(?,?,?)", (row["source_partition"], row["source_offset"], row["payload_sha256"]))
     if row["kind"] == "payment" and not row["retry"]:
         payment = row["payment"]
         facts = {k: v for k, v in payment.items() if k != "producer_time"}
@@ -95,8 +97,11 @@ def record(db, row):
         db.execute("INSERT INTO payments VALUES(?,?,?,?,NULL)", (payment["event_id"], payment["customer_id"], digest, json.dumps(payment)))
 
 
-def reconcile(db, report):
+def reconcile(db, report, require_complete=True):
     # Compare bounded pages to a disk-backed ledger, including retry/control coordinates.
+    # Re-running after an outage starts a fresh observation, not a cached claim of completeness.
+    db.execute("UPDATE inputs SET archived=0")
+    db.execute("UPDATE payments SET decision=NULL")
     cursor = (-1, -1)
     archived = 0
     while True:
@@ -112,8 +117,9 @@ def reconcile(db, report):
             expected = db.execute("SELECT hash FROM inputs WHERE partition=? AND offset=?", cursor).fetchone()
             if expected != (row["hash"],) or int(row["variants"]) != 1:
                 raise AssertionError("Archived input is unexpected or has conflicting bytes: " + str(cursor))
+            db.execute("UPDATE inputs SET archived=1 WHERE partition=? AND offset=?", cursor)
             archived += 1
-    if archived != db.execute("SELECT count(*) FROM inputs").fetchone()[0]:
+    if require_complete and archived != db.execute("SELECT count(*) FROM inputs").fetchone()[0]:
         raise AssertionError("Acknowledged input missing from archive")
     after, evaluation, decisions = "", "", 0
     while True:
@@ -124,6 +130,7 @@ def reconcile(db, report):
             break
         for row in rows:
             after, evaluation = row["event_id"], row["evaluation_id"]
+            row = dict(row)
             expected = db.execute("SELECT hash, decision FROM payments WHERE id=?", (after,)).fetchone()
             if expected is None or expected[0] != row["input_sha256"] or expected[1] is not None:
                 raise AssertionError("Unexpected, duplicated or mismatched logical decision: " + after)
@@ -134,9 +141,66 @@ def reconcile(db, report):
             db.execute("UPDATE payments SET decision=? WHERE id=?", (json.dumps(row), after))
             decisions += 1
     db.commit()
-    if decisions != report["expected_payments"]:
+    report["reconciliation"] = {
+        "checked_at": now(), "verified": True,
+        "scope": "Acknowledged inputs and generated payments in this run",
+        "archived": archived, "evaluated": decisions,
+        "missing_archive": db.execute("SELECT count(*) FROM inputs WHERE archived=0").fetchone()[0],
+        "without_decision": db.execute("SELECT count(*) FROM payments WHERE decision IS NULL").fetchone()[0],
+        "missing_input_examples": [{"partition": p, "offset": str(o)} for p, o in db.execute("SELECT partition,offset FROM inputs WHERE archived=0 ORDER BY partition,offset LIMIT 10")],
+        "missing_payment_examples": [row[0] for row in db.execute("SELECT id FROM payments WHERE decision IS NULL ORDER BY id LIMIT 10")],
+    }
+    if require_complete and decisions != report["expected_payments"]:
         raise AssertionError("Missing logical decisions")
     return archived, decisions
+
+
+def consumer_offsets():
+    result = compose("exec", "-T", "jobmanager", "java", "-cp", JAR,
+                     "com.portfolio.paymentrisk.tools.ConsumerOffsets", capture_output=True, text=True)
+    return json.loads(next(line for line in reversed(result.stdout.splitlines()) if line.startswith("{")))
+
+
+def assert_offsets_unchanged(before, during):
+    for kind, partitions in before.items():
+        previous = {(p["topic"], p["partition"]): p["committed"] for p in partitions}
+        current = {(p["topic"], p["partition"]): p["committed"] for p in during[kind]}
+        # Initializing a fresh group at zero consumes nothing.
+        if {k: max(0, v) for k, v in previous.items()} != {k: max(0, v) for k, v in current.items()}:
+            raise AssertionError(kind + " consumer committed offsets during the database outage")
+
+
+def progress(report):
+    counts = sql("""SELECT
+        (SELECT uniqExact(tuple(source_partition, source_offset)) FROM risk.payment_ingress WHERE source_topic={raw:String}) AS archived,
+        (SELECT count() FROM risk.decisions_current WHERE source_topic={decisions:String} AND startsWith(event_id,{prefix:String})) AS decisions,
+        (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS conflicts""",
+        raw=report["input_topic"], decisions=report["decision_topic"], prefix=report["run_id"] + "-payment-")[0]
+    if int(counts["conflicts"]):
+        raise AssertionError("ClickHouse reports an integrity conflict or quarantined decision")
+    report["archived_records"] = int(counts["archived"])
+    report["stored_decisions"] = int(counts["decisions"])
+    report["reconciliation"] = {
+        "checked_at": now(), "verified": False,
+        "scope": "Counts for acknowledged inputs and generated payments in this run; hashes checked at completion",
+        "archived": report["archived_records"], "evaluated": report["stored_decisions"],
+        "missing_archive": max(0, report.get("acknowledged_deliveries", 0) + report.get("control_records", 0) - report["archived_records"]),
+        "without_decision": max(0, report.get("acknowledged_payments", 0) - report["stored_decisions"]),
+    }
+
+
+def complete_report(report, run_dir):
+    report["decision_counts"] = {row["decision"]: int(row["n"]) for row in sql(
+        "SELECT decision, count() AS n FROM risk.decisions_current WHERE source_topic={topic:String} AND startsWith(event_id,{prefix:String}) GROUP BY decision",
+        topic=report["decision_topic"], prefix=report["run_id"] + "-payment-")}
+    digest = hashlib.sha256()
+    with (run_dir / "inputs.jsonl").open("rb") as source:
+        for block in iter(lambda: source.read(65536), b""):
+            digest.update(block)
+    report["input_log_sha256"] = digest.hexdigest()
+    report["verification"] = "Every acknowledged Kafka coordinate and payload hash archived; exactly one matching logical decision per generated payment."
+    report["status"] = "COMPLETE"
+    report.pop("error", None)
 
 
 def export_snapshot(report, db, target):
@@ -202,11 +266,21 @@ def run(args):
         write_json(run_dir / "report.json", report)
         write_json(WORK / "latest.json", report)
     publish()
+    database_stopped = False
     try:
         compose("up", "-d", "--no-build")
+        subprocess.run(["python3", "scripts/apply-analytics-schema.py"], cwd=ROOT, check=True)
         operations.ensure_no_active_job()
         compose("exec", "-T", "jobmanager", "flink", "run", "-d", JAR)
         report["job_id"] = operations.wait_running()
+        if args.database_outage:
+            report["status"] = "DATABASE_UNAVAILABLE"
+            report["recovery"] = {"stage": "DATABASE_UNAVAILABLE", "started_at": now()}
+            publish()
+            database_stopped = True
+            compose("stop", "clickhouse")
+            report["recovery"]["offsets_before"] = consumer_offsets()
+            publish()
         report["status"] = "GENERATING"
         publish()
         compose("cp", str(run_dir / "config.json"), "jobmanager:/tmp/showcase-config.json")
@@ -229,6 +303,11 @@ def run(args):
                         report[counter] = report.get(counter, 0) + 1
                         if time.monotonic() - last_progress >= 1:
                             db.commit()
+                            if not database_stopped and "input_topic" in report:
+                                try:
+                                    progress(report)
+                                except OSError:
+                                    report["storage_unavailable"] = True
                             publish()
                             last_progress = time.monotonic()
                     if row["kind"] in ("start", "complete"):
@@ -243,34 +322,59 @@ def run(args):
             db.commit()
             if "control_records" not in report:
                 raise RuntimeError("Producer did not finish")
+            if database_stopped:
+                report["recovery"]["offsets_during"] = consumer_offsets()
+                assert_offsets_unchanged(report["recovery"]["offsets_before"], report["recovery"]["offsets_during"])
+                if not any(p["log_end"] > max(0, p["committed"]) for p in report["recovery"]["offsets_during"]["archive"]):
+                    raise AssertionError("No acknowledged input backlog was observed")
+                report["recovery"].update(stage="BACKLOG_OBSERVED", acknowledged_during_outage=report["acknowledged_deliveries"], offsets_unchanged=True)
+                report["status"] = "DATABASE_UNAVAILABLE"
+                publish()
+                # Keep this observable in the dashboard before automatic recovery.
+                for remaining in range(args.outage_hold_seconds, 0, -1):
+                    report["recovery"]["resume_in_seconds"] = remaining
+                    publish()
+                    time.sleep(1)
+                report["recovery"].update(stage="RECOVERING", resume_in_seconds=0, resumed_at=now())
+                publish()
+                compose("up", "-d", "--no-deps", "clickhouse")
+                database_stopped = False
             report["status"] = "VERIFYING"
             publish()
             deadline = time.monotonic() + 240
             while True:
-                counts = sql("""SELECT
-                    (SELECT uniqExact(tuple(source_partition, source_offset)) FROM risk.payment_ingress WHERE source_topic={raw:String}) AS archived,
-                    (SELECT count() FROM risk.decisions_current WHERE source_topic={decisions:String} AND startsWith(event_id,{prefix:String})) AS decisions,
-                    (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS conflicts""",
-                    raw=report["input_topic"], decisions=report["decision_topic"], prefix=run_id + "-payment-")[0]
-                report["archived_records"] = int(counts["archived"])
-                report["stored_decisions"] = int(counts["decisions"])
+                try:
+                    progress(report)
+                    report["storage_unavailable"] = False
+                except OSError:
+                    report["storage_unavailable"] = True
+                    publish()
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("Database did not recover; acknowledged inputs remain in Kafka")
+                    time.sleep(3)
+                    continue
                 publish()
-                if int(counts["conflicts"]):
-                    raise AssertionError("ClickHouse reports an integrity conflict or quarantined decision")
                 if report["archived_records"] >= report["acknowledged_deliveries"] + report["control_records"] and report["stored_decisions"] >= report["expected_payments"]:
                     break
                 if time.monotonic() > deadline:
+                    reconcile(db, report, require_complete=False)
+                    publish()
                     raise TimeoutError("Storage reconciliation timed out; inputs and logs are retained")
                 time.sleep(3)
             report["archived_records"], report["stored_decisions"] = reconcile(db, report)
-            report["decision_counts"] = {row["decision"]: int(row["n"]) for row in sql("SELECT decision, count() AS n FROM risk.decisions_current WHERE source_topic={topic:String} AND startsWith(event_id,{prefix:String}) GROUP BY decision", topic=report["decision_topic"], prefix=run_id + "-payment-")}
-            digest = hashlib.sha256()
-            with (run_dir / "inputs.jsonl").open("rb") as source:
-                for block in iter(lambda: source.read(65536), b""):
-                    digest.update(block)
-            report["input_log_sha256"] = digest.hexdigest()
-            report["verification"] = "Every acknowledged Kafka coordinate and payload hash archived; exactly one matching logical decision per generated payment."
-            report["status"] = "COMPLETE"
+            if args.database_outage:
+                report["recovery"]["stage"] = "REPLAYING"
+                publish()
+                replay = compose("exec", "-T", "jobmanager", "java", "-cp", JAR,
+                                 "com.portfolio.paymentrisk.tools.MaterializerReplay", "--execute", "--reason",
+                                 "Showcase database recovery and retry reconciliation", capture_output=True, text=True)
+                replay_report = json.loads(next(line for line in reversed(replay.stdout.splitlines()) if line.startswith("{")))
+                if replay_report["status"] != "COMPLETE" or replay_report["rejected"]:
+                    raise AssertionError("Decision replay did not complete cleanly")
+                report["archived_records"], report["stored_decisions"] = reconcile(db, report)
+                report["recovery"].update(stage="COMPLETE", completed_at=now(), replay=replay_report,
+                    offsets_after=consumer_offsets(), verification="Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical result per payment.")
+            complete_report(report, run_dir)
             publish()
             export_snapshot(report, db, run_dir / "snapshot.json")
         print(json.dumps({k: report[k] for k in ("run_id", "status", "expected_payments", "transport_retries", "archived_records", "stored_decisions", "decision_counts")}, indent=2))
@@ -279,14 +383,21 @@ def run(args):
         report.update(status="FAILED", error=str(error))
         publish()
         raise
+    finally:
+        if database_stopped:
+            compose("up", "-d", "--no-deps", "clickhouse")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["run", "stop", "export"])
+    parser.add_argument("action", choices=["run", "stop", "export", "reconcile"])
     parser.add_argument("--config", type=Path, default=ROOT / "config/showcase.json")
     parser.add_argument("--no-build", action="store_true", help="Use images already built from this checkout")
+    parser.add_argument("--database-outage", action="store_true", help="Stop the showcase database during generation, recover it and replay decisions")
+    parser.add_argument("--outage-hold-seconds", type=int, default=20, help="Keep the observed backlog visible before recovery (0-60 seconds)")
     args = parser.parse_args()
+    if not 0 <= args.outage_hold_seconds <= 60:
+        parser.error("--outage-hold-seconds must be between 0 and 60")
     if args.action == "run":
         run(args)
     elif args.action == "stop":
@@ -301,6 +412,31 @@ def main():
             if active:
                 operations.savepoint(stop=True)
         compose("down")
+    elif args.action == "reconcile":
+        report = json.loads((WORK / "latest.json").read_text())
+        if "control_records" not in report:
+            raise RuntimeError("Generation did not finish. Inspect inputs.jsonl and producer.log before reconciling this run.")
+        run_dir = WORK / report["run_id"]
+        with ledger(run_dir / "ledger.sqlite") as db:
+            if db.execute("SELECT count(*) FROM inputs").fetchone()[0] != report["acknowledged_deliveries"] + report["control_records"]:
+                raise RuntimeError("The ledger does not cover every acknowledged input. Rebuild it from inputs.jsonl before proceeding.")
+            progress(report)
+            report["archived_records"], report["stored_decisions"] = reconcile(db, report, require_complete=False)
+            complete = not report["reconciliation"]["missing_archive"] and report["stored_decisions"] == report["expected_payments"]
+            report["status"] = "COMPLETE" if complete else "INCOMPLETE"
+            report["updated_at"] = now()
+            report["storage_unavailable"] = False
+            if complete:
+                complete_report(report, run_dir)
+                if report.get("recovery", {}).get("stage") not in (None, "COMPLETE"):
+                    report["recovery"]["stage"] = "STORAGE_RECONCILED"
+            else:
+                report.pop("verification", None)
+            write_json(run_dir / "report.json", report)
+            write_json(WORK / "latest.json", report)
+            if complete:
+                export_snapshot(report, db, run_dir / "snapshot.json")
+            print(json.dumps(report["reconciliation"], indent=2))
     else:
         report = json.loads((WORK / "latest.json").read_text())
         with ledger(WORK / report["run_id"] / "ledger.sqlite") as db:

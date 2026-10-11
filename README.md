@@ -101,6 +101,20 @@ For a short presentation:
 3. Open **Replacement phone** to explain a legitimate payment that the default rules send for review. Open **Familiar device misuse** to show what payment rules cannot infer from the available fields. These examples are selected from the generated run; a small custom run might not contain every behavior.
 4. Use **Overview** for totals and **Transactions** for filtering. Live screens read the retained database across runs; the Showcase report and its customer links identify one specific run.
 
+To demonstrate a database outage and recovery:
+
+```bash
+make showcase-stop
+make showcase-recovery
+# Open Showcase while the command runs
+```
+
+This starts a fresh run, stops ClickHouse, and continues publishing payments through Kafka and Flink. The dashboard shows the outage and acknowledged backlog for 20 seconds before restarting the database. The command checks that archive and decision consumer offsets did not advance while storage was unavailable, waits for both consumers to catch up, compares every input coordinate and payload hash with the generator ledger, then replays committed decisions and checks uniqueness again. It does not reset consumer groups or resend historical payments into live Flink state. The database is restarted if the command fails or is interrupted.
+
+**Processing completeness** shows input records not yet archived and generated payments without a stored decision. During an outage, storage counts are unavailable; during recovery, counts remain provisional until the ID and hash comparison completes. This reconciliation covers the acknowledged records in the current generator run. Missing decisions are not automatically labeled pending, invalid or late. The archive remains available for investigating those outcomes separately.
+
+For a run whose producer finished but whose storage check timed out, restore the services and run `make showcase-reconcile`. It rechecks the retained ledger without producing payments and lists up to ten missing coordinates and payment IDs in `artifacts/showcase/latest.json`. It refuses to report completion if generation or the acknowledgement ledger is incomplete. `make showcase-recovery` is a local demonstration of database availability and retry handling; it does not test replicated storage or recovery from disk loss.
+
 To change the simulation:
 
 ```bash
@@ -316,6 +330,8 @@ Decision decoding and batch work have a sixty-second budget; HTTP requests time 
 
 A lost insert response or failed offset commit can produce physical copies. The SQL views group deliveries by `evaluation_id`, compare business content and expose conflicts. Multiple evaluations for one transaction also require review. Kafka offsets identify deliveries; they do not select a winning business result. This provides a deduplicated analytical view, not a database uniqueness constraint.
 
+The analytical views separate summary fields from full policy and rule evidence. `risk.evaluation_conflicts` compares the complete business content; transaction integrity checks use those conflicting IDs without joining complete decision rows. `risk.decisions_summary` resolves retries before calculating counts, and `risk.decisions_current` loads detailed evidence for a selected customer. Both exclude conflicting transactions, including when a reused evaluation ID names a different customer or transaction. They are ordinary query views, not stored totals; no background refresh or duplicate-sensitive incremental sum is introduced. `content_variants` in transaction integrity is a compatibility indicator: 1 means no conflicting evaluation content, 2 means a conflict exists.
+
 The API returns 503 when stored conflicts or quarantined decisions exist. Direct SQL readers must check `risk.integrity_conflicts` and `risk.materializer_rejections FINAL` before publishing totals. Resolving a conflict requires an explicit data correction; the application does not discard conflicting results automatically.
 
 ### Payment archive
@@ -332,7 +348,7 @@ New input topics disable automatic time and size retention, and the archive has 
 
 [web/src/features/](web/src/features/) contains the React views for totals, decision trends, transaction inspection, rule descriptions, and architecture. TypeScript defines the API response types, Vite builds the frontend, and SVG/CSS render the charts. The rule screen displays packaged defaults; it is not an editor or a live view of broadcast state.
 
-[web/server/overview.mjs](web/server/overview.mjs) queries ClickHouse for totals, 30 time buckets, rule-match counts using `arrayJoin(matched_rules)`, and the latest 100 decisions. Time windows use `processed_at` and are limited to 15 minutes, one hour, or 24 hours. The browser filters the loaded decisions by decision type or a case-insensitive match on transaction ID, customer ID, and matched rule IDs. Search therefore covers the latest 100 loaded decisions, not the complete database.
+[web/server/overview.mjs](web/server/overview.mjs) queries the narrow `risk.decisions_summary` view for totals, 30 time buckets, rule-match counts using `arrayJoin(matched_rules)`, and the latest 100 decisions. Time windows use `processed_at` and are limited to 15 minutes, one hour, or 24 hours. The browser filters the loaded decisions by decision type or a case-insensitive match on transaction ID, customer ID, and matched rule IDs. Search therefore covers the latest 100 loaded decisions, not the complete database.
 
 The API also reads Flink REST for the running job and latest checkpoint, and Prometheus for Kafka source lag. Kafka status is inferred from source metrics; it is not a direct broker probe. A checkpoint is marked current when it completed within three minutes. Finalization p95 estimates `processed_at - event_time` using `quantileTDigest`; it excludes the later Kafka commit wait. Amounts, counts and identity checks remain exact. API and integrity queries have a 256 MiB memory limit and spill aggregation/sorting to disk after 64 MiB. Failed queries return errors rather than partial totals.
 
@@ -346,7 +362,7 @@ The React entry point is [main.tsx](web/src/main.tsx); [App.tsx](web/src/app/App
 
 The **Investigations** section provides customer-ID prefix search, a decision filter, a payment timeline and recorded rule evidence. Select a payment to see all five rules, including nonmatches, observed values, thresholds, eligibility and score contributions. The provenance panel shows event time, evaluation time, engine and policy versions, the policy snapshot and the decision's Kafka coordinates.
 
-[Investigations.tsx](web/src/features/investigations/Investigations.tsx) owns this screen. [investigation.mjs](web/server/investigation.mjs) provides two read-only endpoints: `/api/investigations/customers` and `/api/investigations/timeline`. ClickHouse parameters carry user input; queries have the same time and memory limits as the overview. Pages contain at most 20 rows. Customer pages use the customer ID as a cursor; timeline pages use `(event_time, evaluation_id)` so equal timestamps have a stable order. Reads check the existing integrity and quarantine views before returning data. Pagination operates on current data, not a fixed historical snapshot.
+[Investigations.tsx](web/src/features/investigations/Investigations.tsx) owns this screen. [investigation.mjs](web/server/investigation.mjs) provides two read-only endpoints: `/api/investigations/customers` and `/api/investigations/timeline`. ClickHouse parameters carry user input; queries have the same time and memory limits as the overview. Pages contain at most 20 rows. Customer pages use the customer ID as a cursor; timeline pages use `(event_time, evaluation_id)` so equal timestamps have a stable order. Customer counts use `risk.decisions_summary`; timeline evidence uses `risk.decisions_current`, grouped by customer, event time and evaluation ID so the customer filter applies before evidence aggregation. Reads check the existing integrity and quarantine views before returning data. Pagination operates on current data, not a fixed historical snapshot.
 
 The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
 
@@ -530,8 +546,10 @@ The effective cutoff is the greater of the current watermark and the customer's 
 | `payment_ingress` | Original committed Kafka payment records, before validation, deduplication or evaluation; includes exact bytes and source metadata. |
 | `evaluations` | Append-only deliveries, with full audit data and Kafka provenance. Physical retry rows are expected. |
 | `evaluations_logical` | One row per `evaluation_id`, delivery count and exact number of distinct business results. Processing time and source offsets do not create a new result. |
+| `evaluation_conflicts` | Evaluation IDs with more than one distinct business result, including differences in policy or rule evidence. |
 | `transaction_integrity` / `integrity_conflicts` | Identify conflicting results for an evaluation and multiple evaluations for one transaction. No arbitrary offset chooses a winner. |
 | `decisions_current` | One unambiguous evaluation per transaction. Conflicting transactions are excluded. Always check integrity before publishing totals. |
+| `decisions_summary` | The same valid evaluations with only the fields needed for charts, customer counts and transaction lists. Resolves physical retries before counting. |
 | `materializer_rejections` | Durable quarantine keyed by source topic, partition and offset; query with `FINAL`. |
 | `decisions` / `decisions_legacy` | Previous storage retained for migration. The new materializer does not write it. |
 
@@ -770,6 +788,8 @@ Late events have already passed deduplication. Reusing the same ID within the TT
 
 [infrastructure/docker/Dockerfile](infrastructure/docker/Dockerfile) builds the Java JAR and copies it into the Flink Java 21 image. It enables the S3 filesystem plugin and checks that the Prometheus reporter is available. [web/Dockerfile](web/Dockerfile) builds the Vite assets in one stage, then copies them and the server into a Node runtime with production dependencies.
 
+When upgrading an existing local database, run `make migrate-analytics` before starting the updated website. It creates missing tables and replaces views without deleting retained rows; running it again is safe. New volumes load the same SQL during initialization, and `make showcase` applies it before generation. View replacement is sequential, so perform this local migration before serving requests. This change does not alter Flink state or the Kafka contracts.
+
 ### Kubernetes and object storage
 
 The [Helm chart](infrastructure/helm/payment-risk) creates a `FlinkDeployment` for an existing Flink Kubernetes Operator 1.15.0 installation. It configures RocksDB, object-store checkpoints and savepoints, Kubernetes JobManager recovery metadata, resource limits, savepoint-based upgrades, RBAC, restricted egress, and non-root pods. `allowNonRestoredState: false` prevents an upgrade from silently dropping state.
@@ -863,7 +883,7 @@ python3 scripts/verify-ingress.py
 
 The materializer check replays decisions twice, reconciles exact source coordinates and customer-simulation results, and tests SQL conflict handling. The ingress check temporarily stops ClickHouse, publishes five input records and verifies that archive offsets stay fixed. It restores ClickHouse with Flink and the registry stopped, then compares the archived bytes, keys, headers and null flags. The script restarts ClickHouse and the registry on exit.
 
-`make verify-deployment` renders the chart and validates it against the Operator CRD; it needs Helm and the Python packages declared in CI. Prometheus alert tests run with `promtool test rules alerts.test.yml` from `observability/prometheus`. The website browser script accepts `--static` for a running static demo and otherwise checks the live API as well.
+`make verify-deployment` renders the chart and validates it against the Operator CRD; it needs Helm and the Python packages declared in CI. Prometheus alert tests run with `promtool test rules alerts.test.yml` from `observability/prometheus`. `scripts/verify-showcase-recovery.py` runs the database outage demonstration and checks its live desktop/mobile UI. CI runs it before the normal website acceptance checks, retaining outage/recovery screenshots and the run report. The website browser script accepts `--static` for a running static demo and otherwise checks the live API as well.
 
 ### Load experiments
 
@@ -915,7 +935,19 @@ All calls succeeded through 10,000 decisions. At 50,000, the 2-second budget was
 
 These are direct reader calls with real integrity checks and SQL, bypassing the overview route's five-second cache and concurrent-request sharing. They model cold query work, not four browser requests benefiting from the same cache entry. The small sample sizes and shared runner limit statistical confidence. Nevertheless, the measured query cost is large enough to require work before targeting this volume with interactive concurrency.
 
-The next analytical experiment should reduce repeated full-history integrity/decision scans and compare a customer/time-ordered serving view that preserves exact evaluation identities and conflict detection. Precomputed business totals must be derived from validated logical evaluations, with a documented refresh boundary and reconciliation. The current release keeps exact reads and returns errors when query limits are exceeded.
+The current views remove the join from transaction integrity to complete decision rows, separate small summary records from policy evidence, and apply customer predicates before timeline aggregation. The exact content checks remain in place. A before/after comparison on the same local machine is recorded in [query comparison](docs/evidence/investigation-query-comparison-2026-10-11.json). It includes the source hashes, retries, pagination coverage, request errors and successful latency samples. These short runs are diagnostic measurements, not a production capacity claim.
+
+At 50,000 logical decisions with 5,000 additional retry deliveries, the comparison recorded:
+
+| Query, concurrency 4 | Previous views | Updated views |
+|---|---:|---:|
+| Customer search p95 | 2,594 ms | 691 ms |
+| Customer timeline p95 | 4,223 ms | 1,260 ms |
+| Overview p95 | 12/12 requests failed | 1,726 ms; 0 failures |
+
+The reproduced failures were ClickHouse `TIMEOUT_EXCEEDED` responses at the four-second query deadline. All updated requests succeeded at all three dataset sizes, and pagination and payment counts remained exact. This local comparison used 20 logical CPUs and 15.47 GiB guest memory with the full stack running; it is separate from the four-vCPU CI experiment above.
+
+This reduces the measured cost without introducing precomputed business totals. Full-history integrity checks still grow with retained data. If a larger target workload requires a persisted serving table or aggregates, derive them from validated logical evaluations, define their refresh boundary, and reconcile them with the raw delivery history.
 
 ### Scope and design choices
 

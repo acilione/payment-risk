@@ -1,0 +1,560 @@
+{
+  "comparison": "Same machine and running Compose stack, sequential isolated databases; schema and readers from 6ce4f99 compared with working-tree changes. Both use the updated benchmark runner.",
+  "limitations": "One short run per implementation, shared host and uncontrolled caches. Successful request latencies exclude failures. Health probes are stubbed; API caching and Kafka-to-database throughput are outside this test.",
+  "before_revision": "6ce4f99b83c122b4b5f16ec03fbddc0b565895de",
+  "before": {
+    "sourceCommit": "6ce4f99b83c122b4b5f16ec03fbddc0b565895de",
+    "generatedAt": "2026-10-11T13:37:24.141Z",
+    "environment": {
+      "platform": "linux",
+      "cpus": 20,
+      "memoryBytes": 16605843456
+    },
+    "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+    "budgets": {
+      "requestP95Ms": 2000,
+      "errors": 0
+    },
+    "queryErrors": [
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4010.019 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4007.944 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4003.367 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4008.368 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4007.169 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4006.175 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4004.335 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4006.765 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4006.592 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4008.628 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4009.405 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4017.991 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4006.471 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4012.008 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      },
+      {
+        "status": 408,
+        "detail": "Code: 159. DB::Exception: Timeout exceeded: elapsed 4011.510 ms, maximum: 4000.000 ms. (TIMEOUT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+      }
+    ],
+    "stages": [
+      {
+        "logicalPayments": 1000,
+        "physicalDeliveries": 1100,
+        "checks": [],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 142.851003,
+            "p95Ms": 171.21469000000002,
+            "maxMs": 171.21469000000002,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 152.29787800000008,
+            "p95Ms": 196.75944299999992,
+            "maxMs": 196.75944299999992,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 131.4494810000001,
+            "p95Ms": 137.60627999999997,
+            "maxMs": 137.60627999999997,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 184.44846099999995,
+            "p95Ms": 194.9659359999996,
+            "maxMs": 194.9659359999996,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 102.04018200000019,
+            "p95Ms": 174.27761299999975,
+            "maxMs": 174.27761299999975,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 370.200292,
+            "p95Ms": 402.39242300000024,
+            "maxMs": 402.39242300000024,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 10000,
+        "physicalDeliveries": 11000,
+        "checks": [
+          "1000 customers across 50 pages, no duplicate or missing IDs"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 158.6996679999993,
+            "p95Ms": 166.68083800000022,
+            "maxMs": 166.68083800000022,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 277.1680639999995,
+            "p95Ms": 366.9739589999999,
+            "maxMs": 366.9739589999999,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 382.81911800000034,
+            "p95Ms": 429.82308999999987,
+            "maxMs": 429.82308999999987,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 464.9202949999999,
+            "p95Ms": 487.59438500000033,
+            "maxMs": 487.59438500000033,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 228.50261900000078,
+            "p95Ms": 252.53369999999995,
+            "maxMs": 252.53369999999995,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 1058.2500409999993,
+            "p95Ms": 1123.1862569999994,
+            "maxMs": 1123.1862569999994,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 50000,
+        "physicalDeliveries": 55000,
+        "checks": [
+          "50 customer payments across 3 timeline pages; physical retries counted once"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 1113.2620829999978,
+            "p95Ms": 1138.6743769999994,
+            "maxMs": 1138.6743769999994,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 1872.5890530000033,
+            "p95Ms": 2594.157124999998,
+            "maxMs": 2594.157124999998,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 1936.9979390000008,
+            "p95Ms": 3363.6108629999944,
+            "maxMs": 3363.6108629999944,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 3881.3454899999997,
+            "p95Ms": 4223.418701000002,
+            "maxMs": 4223.418701000002,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 2049.0681019999975,
+            "p95Ms": 2555.573325999998,
+            "maxMs": 2555.573325999998,
+            "errors": 0,
+            "withinBudget": false
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 0,
+            "p50Ms": null,
+            "p95Ms": null,
+            "maxMs": null,
+            "errors": 12,
+            "withinBudget": false
+          }
+        ]
+      }
+    ],
+    "sourceDirty": true,
+    "sourceHashes": {
+      "infrastructure/docker/clickhouse.sql": "c86f886509079a48e781e3ac1e5ecb9ac47685dbbb619a9222504320171a07ac",
+      "web/server/investigation.mjs": "2b1a1a5b10258f85932b8cad5dbce5e4c019002032f5f793a1c287816075a032",
+      "web/server/overview.mjs": "3c1457b68afea61801e548172c104a5e35e3c30310369efcf9845eb2c9f4fa13",
+      "scripts/benchmark-investigation.mjs": "c179ef6f73f931cc5c193f3d576e11eea231cc8119f04a54ee4dfbd99d09d258"
+    }
+  },
+  "after": {
+    "sourceCommit": "6ce4f99b83c122b4b5f16ec03fbddc0b565895de",
+    "generatedAt": "2026-10-11T13:39:27.691Z",
+    "environment": {
+      "platform": "linux",
+      "cpus": 20,
+      "memoryBytes": 16605843456
+    },
+    "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+    "budgets": {
+      "requestP95Ms": 2000,
+      "errors": 0
+    },
+    "queryErrors": [],
+    "stages": [
+      {
+        "logicalPayments": 1000,
+        "physicalDeliveries": 1100,
+        "checks": [],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 35.82149799999996,
+            "p95Ms": 37.509581000000026,
+            "maxMs": 37.509581000000026,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 46.24058000000002,
+            "p95Ms": 48.85576800000001,
+            "maxMs": 48.85576800000001,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 60.75374199999999,
+            "p95Ms": 63.93625300000008,
+            "maxMs": 63.93625300000008,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 78.08611399999995,
+            "p95Ms": 84.26291800000001,
+            "maxMs": 84.26291800000001,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 41.951745000000074,
+            "p95Ms": 46.4767159999999,
+            "maxMs": 46.4767159999999,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 107.53423800000019,
+            "p95Ms": 140.64816799999994,
+            "maxMs": 140.64816799999994,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 10000,
+        "physicalDeliveries": 11000,
+        "checks": [
+          "1000 customers across 50 pages, no duplicate or missing IDs"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 130.46219699999983,
+            "p95Ms": 152.02010299999984,
+            "maxMs": 152.02010299999984,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 187.3975300000002,
+            "p95Ms": 226.10341199999993,
+            "maxMs": 226.10341199999993,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 177.860721,
+            "p95Ms": 197.39764799999966,
+            "maxMs": 197.39764799999966,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 219.67979099999957,
+            "p95Ms": 229.61104299999988,
+            "maxMs": 229.61104299999988,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 94.82537599999978,
+            "p95Ms": 95.34800900000027,
+            "maxMs": 95.34800900000027,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 281.36675300000024,
+            "p95Ms": 303.3714909999999,
+            "maxMs": 303.3714909999999,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      },
+      {
+        "logicalPayments": 50000,
+        "physicalDeliveries": 55000,
+        "checks": [
+          "50 customer payments across 3 timeline pages; physical retries counted once"
+        ],
+        "measurements": [
+          {
+            "operation": "customers",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 498.63195300000007,
+            "p95Ms": 500.8203530000028,
+            "maxMs": 500.8203530000028,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "customers",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 651.6026850000017,
+            "p95Ms": 690.8059379999977,
+            "maxMs": 690.8059379999977,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 547.0389880000002,
+            "p95Ms": 655.2104590000017,
+            "maxMs": 655.2104590000017,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "timeline",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 1073.0911970000016,
+            "p95Ms": 1259.8698299999996,
+            "maxMs": 1259.8698299999996,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 1,
+            "attempts": 3,
+            "samples": 3,
+            "p50Ms": 548.5246559999978,
+            "p95Ms": 625.5582020000002,
+            "maxMs": 625.5582020000002,
+            "errors": 0,
+            "withinBudget": true
+          },
+          {
+            "operation": "overview",
+            "concurrency": 4,
+            "attempts": 12,
+            "samples": 12,
+            "p50Ms": 1439.149091000003,
+            "p95Ms": 1726.2301030000017,
+            "maxMs": 1726.2301030000017,
+            "errors": 0,
+            "withinBudget": true
+          }
+        ]
+      }
+    ],
+    "sourceDirty": true,
+    "sourceHashes": {
+      "infrastructure/docker/clickhouse.sql": "e566be0d46cf68fbfb91825feab9debf078ac6e027cd010b14b1a66d35c7d5be",
+      "web/server/investigation.mjs": "a14638ef0f2b05debdbcb0f905ece77540862b6a5319a050977d460952b8d830",
+      "web/server/overview.mjs": "0a56499d3b3160b70407033ad473ddb2348c5abe4f7b852cc9ad6bada74d060f",
+      "scripts/benchmark-investigation.mjs": "c179ef6f73f931cc5c193f3d576e11eea231cc8119f04a54ee4dfbd99d09d258"
+    }
+  }
+}

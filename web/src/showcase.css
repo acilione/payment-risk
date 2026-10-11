@@ -265,3 +265,26 @@
     padding: 18px;
   }
 }
+.showcase-reconciliation {
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.reconciliation-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 20px 0;
+}
+.reconciliation-counts dt {
+  font-size: 13px;
+}
+.reconciliation-counts dd {
+  margin: 8px 0 0;
+  font-size: 28px;
+  font-weight: 600;
+}
+.recovery-progress {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
