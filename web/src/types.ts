@@ -1,4 +1,5 @@
 export type DecisionKind = "APPROVE" | "REVIEW" | "REJECT";
+export type DecisionFilter = DecisionKind | "ALL";
 export type WindowKey = "15m" | "1h" | "24h";
 export interface Decision {
   transaction_id: string;

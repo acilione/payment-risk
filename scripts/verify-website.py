@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+from react_browser_checks import verify_request_lifecycle
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--url', default='http://127.0.0.1:23001/')
@@ -161,6 +162,10 @@ with sync_playwright() as p:
         evidence['checks'].append('upstream outage never fabricates demo data')
     assert not errors, errors
     evidence['checks'].append('no browser JavaScript errors')
+    if not args.static:
+        verify_request_lifecycle(browser, args.url, fixture)
+        evidence['checks'].append('stale requests cannot replace a newer window or demo data; showcase polls never overlap')
+        evidence['checks'].append('customer search resets pagination; timeline selection follows the current page')
     browser.close()
 
 (out / 'acceptance.json').write_text(json.dumps(evidence, indent=2) + '\n')

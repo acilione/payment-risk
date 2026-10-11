@@ -1,70 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   Check,
-  Copy,
   Database,
   GitBranch,
   Play,
   RefreshCw,
 } from "lucide-react";
-import snapshot from "./showcase-data";
-import "./showcase.css";
-
-type Report = {
-  run_id: string;
-  status: string;
-  updated_at: string;
-  source_commit: string;
-  source_dirty: boolean;
-  generator_version?: string;
-  expected_payments?: number;
-  acknowledged_deliveries?: number;
-  transport_retries?: number;
-  control_records?: number;
-  archived_records?: number;
-  stored_decisions?: number;
-  decision_counts?: Record<string, number>;
-  verification?: string;
-  error?: string;
-  config: {
-    seed: number;
-    customers: number;
-    min_payments: number;
-    max_payments: number;
-    history_minutes: number;
-    publish_rate: number;
-    retry_percent: number;
-    profiles: Record<string, number>;
-  };
-  customers?: { id: string; profile: string; payments: number }[];
-};
-const names: Record<string, string> = {
-  normal: "Regular purchases",
-  known_devices: "Familiar phone and laptop",
-  checkout_retry: "Checkout retry",
-  new_device: "Replacement phone",
-  takeover: "Account takeover",
-  card_testing: "Card testing",
-  low_burst: "Small payment burst",
-  trusted_device: "Familiar device misuse",
-};
-const descriptions: Record<string, string> = {
-  normal: "Everyday purchases from a familiar phone, spread across the day.",
-  known_devices: "An established phone and laptop used for ordinary purchases.",
-  checkout_retry:
-    "A declined checkout followed by a fresh attempt at the same merchant and amount.",
-  new_device: "A legitimate larger purchase after replacing a phone.",
-  takeover:
-    "Three large purchases from one unfamiliar device after ordinary activity.",
-  card_testing:
-    "Small declined attempts followed by a larger purchase on the same device.",
-  low_burst: "Several small payments in quick succession on a familiar device.",
-  trusted_device:
-    "Simulated misuse whose payment facts resemble ordinary activity.",
-};
-const commands =
-  "make showcase\n# Open http://localhost:23001\nmake showcase-stop\n# Edit config/showcase.json, then run again";
+import { useJsonResource } from "../../hooks/useJsonResource";
+import { profiles } from "./profiles";
+import { RunConfiguration } from "./RunConfiguration";
+import { RunInstructions } from "./RunInstructions";
+import type { ShowcaseReport } from "./types";
+import snapshot from "../../showcase-data";
+import "../../showcase.css";
 export function Showcase({
   demo,
   investigate,
@@ -72,52 +21,16 @@ export function Showcase({
   demo: boolean;
   investigate: (id: string) => void;
 }) {
-  const [report, setReport] = useState<Report | null>(
-    demo ? snapshot.provenance : null,
-  );
-  const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (demo) {
-      setReport(snapshot.provenance);
-      setError("");
-      return;
-    }
-    const controller = new AbortController();
-    const read = async () => {
-      try {
-        const response = await fetch(
-          `${import.meta.env.BASE_URL}api/showcase`,
-          {
-            signal: AbortSignal.any([
-              controller.signal,
-              AbortSignal.timeout(10000),
-            ]),
-            cache: "no-store",
-          },
-        );
-        if (!response.ok)
-          throw new Error(
-            "Start a run with make showcase to see its results here.",
-          );
-        const value: Report = await response.json();
-        if (!controller.signal.aborted) {
-          setReport(value);
-          setError("");
-        }
-      } catch (e) {
-        if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : "Run report unavailable.");
-      }
-    };
-    void read();
-    const timer = setInterval(() => void read(), 5000);
-    return () => {
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, [demo, refresh]);
+  const live = useJsonResource<ShowcaseReport>(
+    demo ? null : "showcase",
+    refresh,
+    5000,
+  );
+  const report: ShowcaseReport | null = demo ? snapshot.provenance : live.data;
+  const error = live.error
+    ? "Start a run with make showcase to see its results here."
+    : "";
   const examples = demo
     ? snapshot.cases
         .filter(
@@ -223,53 +136,7 @@ export function Showcase({
             </p>
           )}
           <div className="showcase-columns">
-            <section className="card showcase-settings">
-              <div className="card-heading">
-                <h2>Generation settings</h2>
-                <span>Seed {report.config.seed}</span>
-              </div>
-              <dl>
-                <div>
-                  <dt>Customers</dt>
-                  <dd>{report.config.customers}</dd>
-                </div>
-                <div>
-                  <dt>Payments per customer</dt>
-                  <dd>
-                    {report.config.min_payments} to {report.config.max_payments}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Simulated history</dt>
-                  <dd>{report.config.history_minutes} minutes</dd>
-                </div>
-                <div>
-                  <dt>Publish rate</dt>
-                  <dd>{report.config.publish_rate}/second</dd>
-                </div>
-                <div>
-                  <dt>Retry probability</dt>
-                  <dd>{report.config.retry_percent}%</dd>
-                </div>
-              </dl>
-              <h3>Customer behavior weights</h3>
-              {Object.entries(report.config.profiles).map(
-                ([profile, weight]) => (
-                  <div className="profile-weight" key={profile}>
-                    <span>{names[profile] || profile}</span>
-                    <div>
-                      <i style={{ width: `${weight}%` }} />
-                    </div>
-                    <b>{weight}%</b>
-                  </div>
-                ),
-              )}
-              <p className="showcase-note">
-                Weights are sampling probabilities. The seed reproduces amounts,
-                behavior and relative timing; each run receives new IDs and a
-                current time anchor.
-              </p>
-            </section>
+            <RunConfiguration config={report.config} />
             <section className="card showcase-results">
               <div className="card-heading">
                 <h2>Pipeline results</h2>
@@ -326,8 +193,8 @@ export function Showcase({
                   onClick={() => investigate(c.id)}
                 >
                   <span>{c.payments} payments</span>
-                  <strong>{names[c.profile] || c.profile}</strong>
-                  <p>{descriptions[c.profile]}</p>
+                  <strong>{profiles[c.profile]?.name || c.profile}</strong>
+                  <p>{profiles[c.profile]?.description}</p>
                   <p>{c.id}</p>
                   <ArrowRight size={17} />
                 </button>
@@ -336,36 +203,7 @@ export function Showcase({
           </section>
         </>
       )}
-      <section className="card showcase-replay">
-        <div>
-          <h2>Run it locally</h2>
-          <p>
-            Edit <code>config/showcase.json</code> to change the seed, volume,
-            amounts and behavior mix. Start a fresh run, then follow its
-            payments in the dashboard.
-          </p>
-          <p className="showcase-note">
-            History is published in chronological order on one Kafka partition.
-            This presentation workflow is not a distributed throughput
-            benchmark. Stopping retains data volumes and a Flink savepoint.
-          </p>
-        </div>
-        <div>
-          <button
-            className="button secondary"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(commands)
-                .then(() => setCopied(true))
-                .catch(() => setCopied(false));
-            }}
-          >
-            <Copy size={14} />
-            {copied ? "Copied" : "Copy commands"}
-          </button>
-          <pre>{commands}</pre>
-        </div>
-      </section>
+      <RunInstructions />
       {report && (
         <p className="showcase-note">
           Generator: {report.generator_version || "starting"} / Source commit:{" "}
