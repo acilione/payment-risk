@@ -3,15 +3,10 @@ Run only against the local synthetic Compose deployment. Test rows use a separat
 """
 import hashlib
 import json
-import os
 import subprocess
-import urllib.request
-import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-env = os.environ.copy()
-env.update(dict(line.split('=', 1) for line in (ROOT / '.env').read_text().splitlines() if line and not line.startswith('#')))
 
 
 def rows(query):
@@ -81,8 +76,7 @@ if simulation_path.exists():
 
 report = {'result': 'PASS', 'baseline': baseline, 'first_replay': first, 'second_replay': second, 'dry_run': dry,
           'customer_simulation': simulation_check,
-          'checks': ['exact source-coordinate reconciliation', 'stable totals after replay', 'dry run has no inserts',
-                     'retry across partitions', 'conflicting results', 'ambiguous transaction identity']}
+          'checks': ['exact source-coordinate reconciliation', 'stable totals after replay', 'dry run has no inserts']}
 (ROOT / 'artifacts').mkdir(exist_ok=True)
 (ROOT / 'artifacts/materializer-replay.json').write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps(report))
