@@ -2326,3 +2326,9 @@ th {
   top: 8px;
   color: #c5d1bb;
 }
+
+.monitoring-note {
+  color: var(--muted, #66716d);
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}

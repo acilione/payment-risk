@@ -1,0 +1,6 @@
+services:
+  website:
+    environment:
+      SHOWCASE_REPORT: /app/showcase/latest.json
+    volumes:
+      - ./artifacts/showcase:/app/showcase:ro

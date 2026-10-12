@@ -108,6 +108,12 @@ public final class AvroCodec {
       case INT -> n.intValue();
       case BOOLEAN -> n.booleanValue();
       case ENUM -> new GenericData.EnumSymbol(s, n.asText());
+      case RECORD -> {
+        var record = new GenericData.Record(s);
+        for (var field : s.getFields())
+          record.put(field.name(), datum(field.schema(), n.get(field.name())));
+        yield record;
+      }
       case ARRAY -> {
         var a = new ArrayList<Object>();
         n.forEach(x -> a.add(datum(s.getElementType(), x)));

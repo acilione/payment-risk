@@ -83,12 +83,24 @@ public class Validate extends ProcessFunction<RawRecord, String> {
               .put("error_message", "Rejected " + (rules ? "rule" : "payment") + " record")
               .put(
                   "raw_payload",
-                  Base64.getEncoder()
-                      .encodeToString(
-                          r.payload == null
-                              ? new byte[0]
-                              : Arrays.copyOf(r.payload, Math.min(4096, r.payload.length))))
-              .put("payload_truncated", r.payload != null && r.payload.length > 4096);
+                  config.dlqPayloadMode().equals("capture")
+                      ? Base64.getEncoder()
+                          .encodeToString(
+                              r.payload == null
+                                  ? new byte[0]
+                                  : Arrays.copyOf(r.payload, Math.min(4096, r.payload.length)))
+                      : "")
+              .put(
+                  "payload_truncated",
+                  r.payload != null
+                      && r.payload.length > 0
+                      && (config.dlqPayloadMode().equals("omit") || r.payload.length > 4096))
+              .put(
+                  "payload_sha256",
+                  com.portfolio.paymentrisk.domain.Audit.sha256(
+                      r.payload == null ? new byte[0] : r.payload))
+              .put("payload_bytes", r.payload == null ? 0 : r.payload.length)
+              .put("payload_mode", config.dlqPayloadMode());
       ctx.output(DLQ, Json.write(error));
       return;
     }

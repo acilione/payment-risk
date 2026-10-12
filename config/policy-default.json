@@ -1,0 +1,63 @@
+{
+  "policy_id": "payment-risk-eur-demo",
+  "version": 1,
+  "review_threshold": 30,
+  "reject_threshold": 70,
+  "rules": [
+    {
+      "rule_id": "R001",
+      "version": 1,
+      "type": "TX_COUNT_VELOCITY",
+      "enabled": true,
+      "score": 25,
+      "window_seconds": 120,
+      "threshold": 5,
+      "currency": "EUR",
+      "updated_at": 0
+    },
+    {
+      "rule_id": "R002",
+      "version": 1,
+      "type": "AMOUNT_VELOCITY",
+      "enabled": true,
+      "score": 35,
+      "window_seconds": 600,
+      "threshold": 300000,
+      "currency": "EUR",
+      "updated_at": 0
+    },
+    {
+      "rule_id": "R003",
+      "version": 1,
+      "type": "UNIQUE_DEVICES",
+      "enabled": true,
+      "score": 20,
+      "window_seconds": 900,
+      "threshold": 3,
+      "currency": "EUR",
+      "updated_at": 0
+    },
+    {
+      "rule_id": "R004",
+      "version": 1,
+      "type": "NEW_DEVICE_HIGH_AMOUNT",
+      "enabled": true,
+      "score": 30,
+      "window_seconds": 2592000,
+      "threshold": 80000,
+      "currency": "EUR",
+      "updated_at": 0
+    },
+    {
+      "rule_id": "R005",
+      "version": 1,
+      "type": "DECLINE_THEN_APPROVAL",
+      "enabled": true,
+      "score": 40,
+      "window_seconds": 600,
+      "threshold": 4,
+      "currency": "EUR",
+      "updated_at": 0
+    }
+  ]
+}

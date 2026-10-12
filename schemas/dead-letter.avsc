@@ -48,6 +48,21 @@
       "name": "schema_id",
       "type": "int",
       "default": -1
+    },
+    {
+      "name": "payload_sha256",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "payload_bytes",
+      "type": "long",
+      "default": 0
+    },
+    {
+      "name": "payload_mode",
+      "type": "string",
+      "default": "legacy-capture"
     }
   ]
 }

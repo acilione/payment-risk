@@ -2,9 +2,9 @@ name: website
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'scripts/verify-website.py', '.github/workflows/website.yml']
+    paths: ['web/**', 'scripts/verify-website.py', 'scripts/react_browser_checks.py', '.github/workflows/website.yml']
   pull_request:
-    paths: ['web/**', 'scripts/verify-website.py', '.github/workflows/website.yml']
+    paths: ['web/**', 'scripts/verify-website.py', 'scripts/react_browser_checks.py', '.github/workflows/website.yml']
   workflow_dispatch:
 permissions:
   contents: read

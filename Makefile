@@ -50,9 +50,29 @@ dashboards:
 	@echo http://localhost:23000
 
 .PHONY: website website-check
+.PHONY: migrate-analytics
+migrate-analytics:
+	python3 scripts/apply-analytics-schema.py
 website:
 	docker compose up -d --build --no-deps website
 website-check:
 	npm --prefix web ci
 	npm --prefix web test
 	npm --prefix web run build
+
+.PHONY: simulate-customers
+simulate-customers:
+	python3 scripts/operations.py simulate-customers
+
+.PHONY: showcase showcase-recovery showcase-reconcile showcase-stop showcase-export
+SHOWCASE_CONFIG ?= config/showcase.json
+showcase:
+	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG)
+showcase-recovery:
+	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG) --database-outage --include-outcomes
+showcase-reconcile:
+	python3 scripts/showcase.py reconcile
+showcase-stop:
+	python3 scripts/showcase.py stop
+showcase-export:
+	python3 scripts/showcase.py export

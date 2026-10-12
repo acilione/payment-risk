@@ -33,7 +33,8 @@ public final class PlatformCli {
                 c.topic("payments.dlq"),
                 c.topic("payments.late"))) {
           var settings = new HashMap<String, String>();
-          settings.put("retention.ms", "604800000");
+          settings.put("retention.ms", topic.equals(c.topic("payments.raw")) ? "-1" : "604800000");
+          if (topic.equals(c.topic("payments.raw"))) settings.put("retention.bytes", "-1");
           settings.put("min.insync.replicas", System.getenv().getOrDefault("KAFKA_MIN_ISR", "1"));
           if (topic.equals(c.topic("risk.rules"))) settings.put("cleanup.policy", "compact");
           if (!existing.contains(topic))

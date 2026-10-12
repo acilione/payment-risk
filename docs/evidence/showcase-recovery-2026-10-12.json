@@ -1,0 +1,375 @@
+{
+  "run_id": "show-e4e1ded83131",
+  "status": "COMPLETE",
+  "started_at": "2026-10-12T08:38:07.572436+00:00",
+  "config": {
+    "seed": 7,
+    "customers": 40,
+    "min_payments": 7,
+    "max_payments": 10,
+    "history_minutes": 1440,
+    "publish_rate": 20,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "source": "Kafka / Flink / ClickHouse",
+  "source_commit": "013d3281cbc47e3a8c29771429557bb8afd585e8",
+  "source_dirty": false,
+  "updated_at": "2026-10-12T08:40:24.748540+00:00",
+  "job_id": "0e8bb75577d6627298fb34990428d8a0",
+  "recovery": {
+    "stage": "COMPLETE",
+    "started_at": "2026-10-12T08:38:48.361872+00:00",
+    "offsets_before": {
+      "archive": [
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "offsets_during": {
+      "archive": [
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 384
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 128
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 90
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 125
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 1
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "acknowledged_during_outage": 383,
+    "offsets_unchanged": true,
+    "resume_in_seconds": 0,
+    "resumed_at": "2026-10-12T08:40:06.008293+00:00",
+    "completed_at": "2026-10-12T08:40:21.763860+00:00",
+    "replay": {
+      "replay_id": "f9e4ec2b-6b7d-4f6d-9611-53ca5fb7f833",
+      "execute": true,
+      "reason": "Showcase database recovery and retry reconciliation",
+      "max_records": 100000,
+      "records_per_second": 500,
+      "records": 337,
+      "rejected": 0,
+      "status": "COMPLETE",
+      "ranges": [
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 0,
+          "start": 0,
+          "end_exclusive": 128
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 1,
+          "start": 0,
+          "end_exclusive": 90
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 2,
+          "start": 0,
+          "end_exclusive": 125
+        }
+      ],
+      "source_positions_digest_format": "partition-offsets-v2",
+      "source_positions_sha256": "753fcea8bf143159e3fdbb8c6f90cee71893b125941c4dee1e4311ea385bf69a"
+    },
+    "offsets_after": {
+      "archive": [
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 0,
+          "committed": 384,
+          "log_end": 384
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 1
+        },
+        {
+          "topic": "show-e4e1ded83131.payments",
+          "partition": 2,
+          "committed": 1,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 0,
+          "committed": 126,
+          "log_end": 128
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 1,
+          "committed": 88,
+          "log_end": 90
+        },
+        {
+          "topic": "show-e4e1ded83131.decisions",
+          "partition": 2,
+          "committed": 123,
+          "log_end": 125
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.dlq",
+          "partition": 2,
+          "committed": 1,
+          "log_end": 2
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 0,
+          "committed": 1,
+          "log_end": 2
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-e4e1ded83131.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "verification": "Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment."
+  },
+  "generator_version": "customer-generator-v2",
+  "event_time_anchor": 1791794349017,
+  "expected_payments": 338,
+  "input_topic": "show-e4e1ded83131.payments",
+  "decision_topic": "show-e4e1ded83131.decisions",
+  "dlq_topic": "show-e4e1ded83131.dlq",
+  "late_topic": "show-e4e1ded83131.late",
+  "acknowledged_deliveries": 383,
+  "acknowledged_payments": 338,
+  "transport_retries": 44,
+  "control_records": 3,
+  "producer_elapsed_ms": 29874,
+  "storage_unavailable": false,
+  "archived_records": 386,
+  "stored_decisions": 337,
+  "reconciliation": {
+    "checked_at": "2026-10-12T08:40:21.763595+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 386,
+    "evaluated": 337,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "383",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-e4e1ded83131-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2450
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "decision_counts": {
+    "APPROVE": 325,
+    "REVIEW": 12
+  },
+  "input_log_sha256": "61372182adc62f8b5a42eeb3fcc510c2bf2c602c78d2873c728b70b62b563ca9",
+  "verification": "Every acknowledged input archived and accounted for as evaluated, invalid, late, or a control record. Retries do not inflate logical assessments."
+}

@@ -20,7 +20,9 @@ export function createReader(
         "X-ClickHouse-Key": password,
         "Content-Type": "text/plain",
       },
-      body: query + " SETTINGS readonly=1, max_execution_time=4 FORMAT JSON",
+      body:
+        query +
+        " SETTINGS readonly=1, max_execution_time=4, max_memory_usage=268435456, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864 FORMAT JSON",
     });
     return result.data;
   }
@@ -29,19 +31,19 @@ export function createReader(
     const seconds = windows[window];
     const bucket = seconds / 30;
     const where = `processed_at >= toUnixTimestamp64Milli(now64()) - ${seconds * 1000}`;
-    const [totals, series, rules, decisions, cluster, metrics] =
+    const [totals, series, rules, decisions, cluster, metrics, integrity] =
       await Promise.allSettled([
         sql(
-          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileExact(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_current WHERE ${where}`,
+          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_summary WHERE ${where}`,
         ),
         sql(
-          `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_current WHERE ${where} GROUP BY time ORDER BY time`,
+          `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_summary WHERE ${where} GROUP BY time ORDER BY time`,
         ),
         sql(
-          `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_current WHERE ${where} GROUP BY id ORDER BY id`,
+          `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_summary WHERE ${where} GROUP BY id ORDER BY id`,
         ),
         sql(
-          `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_current WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
+          `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_summary WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
         ),
         json(flink + "/jobs/overview"),
         json(
@@ -51,9 +53,18 @@ export function createReader(
               "max(flink_taskmanager_job_task_operator_KafkaSourceReader_KafkaConsumer_records_lag_max)",
             ),
         ),
+        sql(
+          "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS unresolved",
+        ),
       ]);
     if ([totals, series, rules, decisions].some((x) => x.status === "rejected"))
       throw new Error("Analytics unavailable");
+    if (
+      integrity.status !== "fulfilled" ||
+      integrity.value.length !== 1 ||
+      Number(integrity.value[0].unresolved) !== 0
+    )
+      throw new Error("Analytics integrity requires review");
     const numeric = (row, fields) =>
       Object.fromEntries(
         Object.entries(row).map(([k, v]) => [

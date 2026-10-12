@@ -18,10 +18,14 @@ import org.junit.jupiter.api.Test;
 class StateOperatorsTest {
   private KeyedBroadcastOperatorTestHarness<String, String, String, String> harness()
       throws Exception {
+    return harness(AppConfig.from(Map.of()));
+  }
+
+  private KeyedBroadcastOperatorTestHarness<String, String, String, String> harness(
+      AppConfig config) throws Exception {
     var operator =
         new CoBroadcastWithKeyedOperator<String, String, String, String>(
-            new CustomerRiskProcessor(AppConfig.from(Map.of())),
-            List.of(CustomerRiskProcessor.RULES));
+            new CustomerRiskProcessor(config), List.of(CustomerRiskProcessor.RULES));
     var h =
         new KeyedBroadcastOperatorTestHarness<String, String, String, String>(
             operator, s -> Json.read(s).path("customer_id").asText(), Types.STRING, 128, 1, 0);
@@ -34,6 +38,51 @@ class StateOperatorsTest {
 
   private String tx(String id, long t) {
     return Json.write(RiskEngineTest.tx(id, t, 100, "d", "APPROVED"));
+  }
+
+  @Test
+  void rollingFeaturesMatchHistoryAcrossWindowChangesAndExpiryBoundaries() throws Exception {
+    var history = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+    var seen = new HashMap<String, Long>();
+    var rules = new ArrayList<com.fasterxml.jackson.databind.JsonNode>(Rules.defaults());
+    var random = new Random(42);
+    long time = 100_000;
+    try (var h = harness()) {
+      for (int i = 0; i < 600; i++) {
+        if (i % 75 == 0) {
+          int slot = (i / 75) % 5;
+          var rule = ((ObjectNode) rules.get(slot)).deepCopy();
+          rule.put("version", i + 2).put("window_seconds", 120 + (i % 3) * 300);
+          rule.put("enabled", i % 150 == 0);
+          if (slot == 0 && i > 0) rule.put("type", "UNIQUE_DEVICES");
+          rules.set(slot, rule);
+          h.processBroadcastElement(Json.write(rule), 0);
+        }
+        // Frequent exact boundaries as well as long gaps exercise expiration before evaluation.
+        time += i % 151 == 0 ? 120_000 : 1 + random.nextInt(1_000);
+        var tx =
+            RiskEngineTest.tx(
+                "diff-" + i,
+                time,
+                random.nextInt(100_000),
+                "device-" + random.nextInt(12),
+                i % 3 == 0 ? "DECLINED" : "APPROVED");
+        String device = tx.path("device_id").asText();
+        var expected =
+            com.portfolio.paymentrisk.domain.RiskEngine.evaluate(
+                tx, history, seen.get(device), rules, 30, 70, 0);
+        h.processElement(Json.write(tx), time);
+        h.processWatermark(time);
+        var actual = Json.read(h.extractOutputValues().get(i));
+        assertEquals(expected.path("risk_score"), actual.path("risk_score"), "score at " + i);
+        assertEquals(
+            expected.path("rule_evidence").toString(),
+            actual.path("rule_evidence").toString(),
+            "evidence at " + i);
+        history.add(tx);
+        seen.put(device, time);
+      }
+    }
   }
 
   @Test
@@ -68,7 +117,7 @@ class StateOperatorsTest {
           .processWatermarkStatus1(
               org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.IDLE);
       assertEquals(1, h.extractOutputValues().size(), "Idleness must not finalize a pending tail");
-      assertEquals(2, h.numEventTimeTimers(), "Pending evaluation and cleanup remain registered");
+      assertTrue(h.numEventTimeTimers() >= 2, "Pending evaluation and expiry remain registered");
       h.getTwoInputOperator()
           .processWatermarkStatus1(
               org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.ACTIVE);
@@ -164,11 +213,15 @@ class StateOperatorsTest {
   }
 
   @Test
-  void cleanupTimerIsCoalescedAndAllIdleCustomerStateIsRemoved() throws Exception {
+  void expiryTimersStayBoundedAndAllIdleCustomerStateIsRemoved() throws Exception {
     try (var h = harness()) {
       for (int i = 0; i < 100; i++) h.processElement(tx("e" + i, 100_000 + i), 100_000 + i);
       h.processWatermark(100_100);
-      assertEquals(1, h.numEventTimeTimers(), "Only next cleanup is retained after evaluation");
+      assertTrue(
+          h.numEventTimeTimers() <= 401,
+          "Three distinct rule windows, history and one active device expiry");
+      h.processWatermark(4_000_000);
+      assertEquals(1, h.numEventTimeTimers(), "Repeated device use retains only its latest expiry");
       h.processWatermark(3_000_000_000L);
       assertEquals(0, h.numEventTimeTimers());
       var backend =
@@ -204,8 +257,110 @@ class StateOperatorsTest {
       h.setStateTtlProcessingTime(200);
       var replay =
           RiskEngineTest.tx("same", 1000, 100, "d", "APPROVED").put("customer_id", "another");
-      h.processElement(new StreamRecord<>(Json.write(replay)));
+      assertThrows(
+          IllegalStateException.class,
+          () -> h.processElement(new StreamRecord<>(Json.write(replay))));
       assertTrue(h.extractOutputValues().isEmpty());
+    }
+  }
+
+  @Test
+  void watchdogNeverFinalizesPaymentsAndStopsWhenQueueDrains() throws Exception {
+    try (var h = harness(AppConfig.from(Map.of("PENDING_ALERT_MS", "1000")))) {
+      h.processElement(tx("pending", 100_000), 100_000);
+      h.setProcessingTime(5000);
+      assertTrue(h.extractOutputValues().isEmpty());
+      assertEquals(1, h.numProcessingTimeTimers());
+      h.processWatermark(100_000);
+      assertEquals(1, h.extractOutputValues().size());
+      assertEquals(0, h.numProcessingTimeTimers());
+    }
+  }
+
+  @Test
+  void frozenPolicyIgnoresBroadcastInterleaving() throws Exception {
+    String catalog =
+        java.nio.file.Files.readString(java.nio.file.Path.of("config/policy-default.json"));
+    var config = AppConfig.from(Map.of("POLICY_CATALOG_JSON", catalog));
+    try (var before = harness(config);
+        var after = harness(config)) {
+      var rule = (ObjectNode) Rules.defaults().get(0);
+      rule.put("version", 2).put("threshold", 0).put("score", 100);
+      before.processBroadcastElement(Json.write(rule), 0);
+      before.processElement(tx("event", 100_000), 100_000);
+      after.processElement(tx("event", 100_000), 100_000);
+      after.processBroadcastElement(Json.write(rule), 0);
+      before.processWatermark(100_000);
+      after.processWatermark(100_000);
+      var a = (ObjectNode) Json.read(before.extractOutputValues().get(0));
+      var b = (ObjectNode) Json.read(after.extractOutputValues().get(0));
+      a.remove("processed_at");
+      b.remove("processed_at");
+      assertEquals(a, b);
+      assertEquals("payment-risk-eur-demo", a.path("policy_id").asText());
+      assertEquals(0, a.path("risk_score").asInt());
+    }
+  }
+
+  @Test
+  void anotherEventForSameTransactionCannotInflateCustomerFeatures() throws Exception {
+    try (var h =
+        new KeyedOneInputStreamOperatorTestHarness<String, String, String>(
+            new KeyedProcessOperator<>(new Deduplicate(10000, "TRANSACTION")),
+            v -> Json.read(v).path("transaction_id").asText(),
+            Types.STRING)) {
+      h.open();
+      var first = RiskEngineTest.tx("event-a", 1000, 100, "d", "APPROVED");
+      h.processElement(new StreamRecord<>(Json.write(first)));
+      first.put("event_id", "event-b");
+      var error =
+          assertThrows(
+              IllegalStateException.class,
+              () -> h.processElement(new StreamRecord<>(Json.write(first))));
+      assertTrue(error.getMessage().contains("TRANSACTION_IDENTITY_CONFLICT"));
+      assertEquals(1, h.extractOutputValues().size());
+    }
+  }
+
+  @Test
+  void restoredPendingPaymentKeepsItsPolicyThresholdsDuringCatalogUpgrade() throws Exception {
+    var policy =
+        (ObjectNode)
+            Json.read(
+                java.nio.file.Files.readString(
+                    java.nio.file.Path.of("config/policy-default.json")));
+    org.apache.flink.runtime.checkpoint.OperatorSubtaskState checkpoint;
+    try (var h = harness(AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(policy))))) {
+      h.processElement(
+          Json.write(RiskEngineTest.tx("old-policy", 100_000, 90_000, "d1", "APPROVED")), 100_000);
+      checkpoint = h.snapshot(1, 1);
+    }
+    policy.put("version", 2).put("review_threshold", 70).put("reject_threshold", 90);
+    var op =
+        new CoBroadcastWithKeyedOperator<String, String, String, String>(
+            new CustomerRiskProcessor(
+                AppConfig.from(Map.of("POLICY_CATALOG_JSON", Json.write(policy)))),
+            List.of(CustomerRiskProcessor.RULES));
+    try (var h =
+        new KeyedBroadcastOperatorTestHarness<String, String, String, String>(
+            op, v -> Json.read(v).path("customer_id").asText(), Types.STRING, 128, 1, 0)) {
+      h.initializeState(checkpoint);
+      h.open();
+      h.getTwoInputOperator()
+          .processWatermarkStatus2(
+              org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.IDLE);
+      h.processWatermark(100_000);
+      h.processElement(
+          Json.write(RiskEngineTest.tx("new-policy", 100_001, 90_000, "d2", "APPROVED")), 100_001);
+      h.processWatermark(100_001);
+      var old = Json.read(h.extractOutputValues().get(0));
+      var next = Json.read(h.extractOutputValues().get(1));
+      assertEquals(30, old.path("risk_score").asInt());
+      assertEquals(30, next.path("risk_score").asInt());
+      assertEquals("REVIEW", old.path("decision").asText());
+      assertEquals("APPROVE", next.path("decision").asText());
+      assertEquals(1, old.path("policy_version").asLong());
+      assertEquals(2, next.path("policy_version").asLong());
     }
   }
 }

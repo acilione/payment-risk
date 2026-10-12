@@ -1,0 +1,370 @@
+{
+  "run_id": "show-3b408c91943b",
+  "measured_at": "2026-10-12T10:08:54.065461+00:00",
+  "scope": "Local generated history through Kafka, Flink and ClickHouse; single input partition; not a sustained multi-partition capacity test",
+  "latency_definition": "First ClickHouse insert timestamp minus producer_time, including event-time waiting, checkpoint commits and any database outage; requires synchronized clocks",
+  "latency": {
+    "samples": 10000,
+    "p50_ms": 112656,
+    "p95_ms": 151375,
+    "p99_ms": 157684,
+    "max_ms": 158871
+  },
+  "reconciliation": {
+    "checked_at": "2026-10-12T10:08:50.387702+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 11012,
+    "evaluated": 10000,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "11009",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-3b408c91943b-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2027
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "config": {
+    "seed": 7,
+    "customers": 200,
+    "min_payments": 50,
+    "max_payments": 50,
+    "history_minutes": 1440,
+    "publish_rate": 500,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "recovery": {
+    "stage": "COMPLETE",
+    "started_at": "2026-10-12T10:04:45.937441+00:00",
+    "offsets_before": {
+      "archive": [
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "offsets_during": {
+      "archive": [
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 11010
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 3610
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 3260
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 3160
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "acknowledged_during_outage": 11009,
+    "offsets_unchanged": true,
+    "resume_in_seconds": 0,
+    "resumed_at": "2026-10-12T10:07:10.218806+00:00",
+    "completed_at": "2026-10-12T10:08:50.400239+00:00",
+    "replay": {
+      "replay_id": "a562bc8c-f189-4353-8d8e-fffffa45e8c5",
+      "execute": true,
+      "reason": "Showcase database recovery and retry reconciliation",
+      "max_records": 100000,
+      "records_per_second": 500,
+      "records": 10000,
+      "rejected": 0,
+      "status": "COMPLETE",
+      "ranges": [
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 0,
+          "start": 0,
+          "end_exclusive": 3610
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 1,
+          "start": 0,
+          "end_exclusive": 3260
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 2,
+          "start": 0,
+          "end_exclusive": 3160
+        }
+      ],
+      "source_positions_digest_format": "partition-offsets-v2",
+      "source_positions_sha256": "8d9685c9385f8d45f5bb42da18423ccae3a786382e5effce4202c779ea44a29e"
+    },
+    "offsets_after": {
+      "archive": [
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 0,
+          "committed": 11010,
+          "log_end": 11010
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 1
+        },
+        {
+          "topic": "show-3b408c91943b.payments",
+          "partition": 2,
+          "committed": 1,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 0,
+          "committed": 3608,
+          "log_end": 3610
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 1,
+          "committed": 3258,
+          "log_end": 3260
+        },
+        {
+          "topic": "show-3b408c91943b.decisions",
+          "partition": 2,
+          "committed": 3158,
+          "log_end": 3160
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 2
+        },
+        {
+          "topic": "show-3b408c91943b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 0,
+          "committed": 1,
+          "log_end": 2
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-3b408c91943b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "verification": "Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment."
+  },
+  "metrics_file": "artifacts/pipeline-load/1791799439000803559-metrics.jsonl",
+  "source_commit": "2a2c05fd2234b4cb6a66379a7c4388fad74f5d00",
+  "source_dirty": false,
+  "input_log_sha256": "59cd428dfd7f88a00add19704430f3a5c739e0385d78d807a95ff69e1a73e277",
+  "counts": {
+    "expected_payments": 10001,
+    "acknowledged_deliveries": 11009,
+    "transport_retries": 1007,
+    "stored_decisions": 10000,
+    "archived_records": 11012,
+    "producer_elapsed_ms": 95484
+  },
+  "producer_elapsed_definition": "Producer execution includes checkpoint/final-assessment waits; configured publish_rate is a ceiling, not achieved pipeline throughput."
+}

@@ -129,4 +129,42 @@ class RiskEngineTest {
             .path("risk_score")
             .asInt());
   }
+
+  @org.junit.jupiter.api.Test
+  void scansLargeLazyHistoryOnceWithoutCollectingOrCopyingDevices() {
+    int count = 100_000;
+    var iterators = new java.util.concurrent.atomic.AtomicInteger();
+    var reads = new java.util.concurrent.atomic.AtomicInteger();
+    long now = 2_000_000;
+    Iterable<com.fasterxml.jackson.databind.JsonNode> history =
+        () -> {
+          assertEquals(1, iterators.incrementAndGet(), "Feature calculation must make one pass");
+          return new java.util.Iterator<>() {
+            int index;
+
+            public boolean hasNext() {
+              return index < count;
+            }
+
+            public com.fasterxml.jackson.databind.JsonNode next() {
+              if (!hasNext()) throw new java.util.NoSuchElementException();
+              reads.incrementAndGet();
+              return tx("history", now - 1000, 1, "device-" + index++ % 3, "DECLINED");
+            }
+          };
+        };
+    var result =
+        com.portfolio.paymentrisk.domain.RiskEngine.evaluate(
+            tx("current", now, 1, "known", "APPROVED"),
+            history,
+            now - 2000,
+            com.portfolio.paymentrisk.domain.Rules.defaults(),
+            30,
+            70,
+            now);
+    assertEquals(count, reads.get());
+    assertEquals(85, result.path("risk_score").asInt());
+    assertEquals(100001, result.path("rule_evidence").get(0).path("observed").asLong());
+    assertEquals(4, result.path("rule_evidence").get(2).path("observed").asLong());
+  }
 }

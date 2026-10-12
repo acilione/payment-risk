@@ -10,3 +10,7 @@ parallelism: 4
 replicas: 2
 allowedEgressCidrs: []
 initialSavepointPath: ''
+
+# Immutable ConfigMap with policy.json; SHA-256 of that exact file.
+policyConfigMap: ''
+policySha256: ''

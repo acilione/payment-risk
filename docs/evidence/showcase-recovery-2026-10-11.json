@@ -1,0 +1,231 @@
+{
+  "run_id": "show-f262350825c9",
+  "status": "COMPLETE",
+  "started_at": "2026-10-11T13:43:54.078270+00:00",
+  "config": {
+    "seed": 7,
+    "customers": 40,
+    "min_payments": 7,
+    "max_payments": 10,
+    "history_minutes": 1440,
+    "publish_rate": 20,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "source": "Kafka / Flink / ClickHouse",
+  "source_commit": "47ab07a85729452333c59f8845bce6ac1739c5f6",
+  "source_dirty": false,
+  "updated_at": "2026-10-11T13:46:55.375019+00:00",
+  "job_id": "9aeb26b11ac25e8dd59c6dea051528e8",
+  "recovery": {
+    "stage": "COMPLETE",
+    "started_at": "2026-10-11T13:44:56.593521+00:00",
+    "offsets_before": {
+      "archive": [
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "offsets_during": {
+      "archive": [
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 382
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 98
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 139
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 100
+        }
+      ]
+    },
+    "acknowledged_during_outage": 381,
+    "offsets_unchanged": true,
+    "resume_in_seconds": 0,
+    "resumed_at": "2026-10-11T13:46:07.081951+00:00",
+    "completed_at": "2026-10-11T13:46:39.966632+00:00",
+    "replay": {
+      "replay_id": "5c8b4045-ce0f-4958-a1d1-609e012b6750",
+      "execute": true,
+      "reason": "Showcase database recovery and retry reconciliation",
+      "max_records": 100000,
+      "records_per_second": 500,
+      "records": 337,
+      "rejected": 0,
+      "status": "COMPLETE",
+      "ranges": [
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 0,
+          "start": 0,
+          "end_exclusive": 100
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 1,
+          "start": 0,
+          "end_exclusive": 141
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 2,
+          "start": 0,
+          "end_exclusive": 102
+        }
+      ],
+      "source_positions_digest_format": "partition-offsets-v2",
+      "source_positions_sha256": "a6f7ea30e0da4fd96e3a4a759d07383ad290621ce5b21ff4a054953e53245084"
+    },
+    "offsets_after": {
+      "archive": [
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 0,
+          "committed": 382,
+          "log_end": 382
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 1
+        },
+        {
+          "topic": "show-f262350825c9.payments",
+          "partition": 2,
+          "committed": 1,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 0,
+          "committed": 98,
+          "log_end": 100
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 1,
+          "committed": 139,
+          "log_end": 141
+        },
+        {
+          "topic": "show-f262350825c9.decisions",
+          "partition": 2,
+          "committed": 100,
+          "log_end": 102
+        }
+      ]
+    },
+    "verification": "Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical result per payment."
+  },
+  "generator_version": "customer-generator-v2",
+  "event_time_anchor": 1791726315974,
+  "expected_payments": 337,
+  "input_topic": "show-f262350825c9.payments",
+  "decision_topic": "show-f262350825c9.decisions",
+  "acknowledged_deliveries": 381,
+  "acknowledged_payments": 337,
+  "transport_retries": 44,
+  "control_records": 3,
+  "producer_elapsed_ms": 23983,
+  "storage_unavailable": false,
+  "archived_records": 384,
+  "stored_decisions": 337,
+  "reconciliation": {
+    "checked_at": "2026-10-11T13:46:39.962823+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs and generated payments in this run",
+    "archived": 384,
+    "evaluated": 337,
+    "missing_archive": 0,
+    "without_decision": 0,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "decision_counts": {
+    "APPROVE": 325,
+    "REVIEW": 12
+  },
+  "input_log_sha256": "30b7aaf42bd7af0d1d348dd597ad0726862a267bc96d0956d6813638784989a2",
+  "verification": "Every acknowledged Kafka coordinate and payload hash archived; exactly one matching logical decision per generated payment."
+}

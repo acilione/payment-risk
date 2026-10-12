@@ -9,7 +9,19 @@ x-logging: &logging
 x-app-env: &app-env
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   SCHEMA_REGISTRY_URL: http://registry:8080/apis/ccompat/v7
-  TRANSACTIONAL_PREFIX: payment-risk-local-v1
+  TRANSACTIONAL_PREFIX: ${TRANSACTIONAL_PREFIX:-payment-risk-local-v1}
+  KAFKA_GROUP: ${KAFKA_GROUP:-payment-risk-v1}
+  ARCHIVER_GROUP: ${ARCHIVER_GROUP:-risk-payment-archive-v1}
+  MATERIALIZER_GROUP: ${MATERIALIZER_GROUP:-risk-clickhouse-evaluations-v2}
+  PAYMENTS_TOPIC: ${PAYMENTS_TOPIC:-payments.raw}
+  RULES_TOPIC: ${RULES_TOPIC:-risk.rules}
+  DECISIONS_TOPIC: ${DECISIONS_TOPIC:-risk.decisions}
+  DLQ_TOPIC: ${DLQ_TOPIC:-payments.dlq}
+  LATE_TOPIC: ${LATE_TOPIC:-payments.late}
+  INGEST_BATCH_BYTES: ${INGEST_BATCH_BYTES:-1048576}
+  INGEST_BATCH_ROWS: ${INGEST_BATCH_ROWS:-1000}
+  INGEST_BATCH_MS: ${INGEST_BATCH_MS:-1000}
+  INGEST_MAX_POLL_RECORDS: ${INGEST_MAX_POLL_RECORDS:-250}
   CLICKHOUSE_URL: http://clickhouse:8123
   CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
   CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
@@ -208,6 +220,15 @@ services:
     image: payment-risk:0.1.0
     environment: *app-env
     entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.DecisionMaterializer]
+    restart: unless-stopped
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+      clickhouse: {condition: service_healthy}
+  payment-archiver:
+    logging: *logging
+    image: payment-risk:0.1.0
+    environment: *app-env
+    entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.PaymentArchiver]
     restart: unless-stopped
     depends_on:
       bootstrap: {condition: service_completed_successfully}

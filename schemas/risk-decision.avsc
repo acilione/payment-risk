@@ -60,6 +60,89 @@
     {
       "name": "processed_at",
       "type": "long"
+    },
+    {
+      "name": "evaluation_id",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "engine_version",
+      "type": "string",
+      "default": "legacy"
+    },
+    {
+      "name": "policy_snapshot",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "policy_id",
+      "type": "string",
+      "default": "dynamic"
+    },
+    {
+      "name": "policy_version",
+      "type": "long",
+      "default": 0
+    },
+    {
+      "name": "rule_evidence",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "RuleEvidence",
+          "fields": [
+            {
+              "name": "rule_id",
+              "type": "string"
+            },
+            {
+              "name": "rule_version",
+              "type": "long"
+            },
+            {
+              "name": "type",
+              "type": "string"
+            },
+            {
+              "name": "enabled",
+              "type": "boolean"
+            },
+            {
+              "name": "window_seconds",
+              "type": "long"
+            },
+            {
+              "name": "threshold",
+              "type": "long"
+            },
+            {
+              "name": "observed",
+              "type": "long"
+            },
+            {
+              "name": "eligible",
+              "type": "boolean"
+            },
+            {
+              "name": "matched",
+              "type": "boolean"
+            },
+            {
+              "name": "score_contribution",
+              "type": "int"
+            }
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "input_sha256",
+      "type": "string",
+      "default": ""
     }
   ]
 }

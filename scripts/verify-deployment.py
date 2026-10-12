@@ -17,6 +17,7 @@ rendered = subprocess.check_output(['helm', 'template', 'payment-risk', str(root
     '--set', 'image=ghcr.io/example/payment-risk@sha256:' + 'a' * 64,
     '--set', 'bootstrapServers=kafka.example:9093', '--set', 'schemaRegistryUrl=https://registry.example/apis/ccompat/v7',
     '--set', 'checkpointBucket=example-state', '--set', 'transactionalPrefix=payment-risk-prod',
+    '--set', 'policyConfigMap=payment-risk-policy-v1', '--set', 'policySha256=' + 'b' * 64,
     '--set', 'allowedEgressCidrs[0]=10.0.0.0/8'], text=True)
 schema = next(v['schema']['openAPIV3Schema'] for v in crd['spec']['versions'] if v['name'] == 'v1beta1')
 deployment = next(x for x in yaml.safe_load_all(rendered) if x and x['kind'] == 'FlinkDeployment')

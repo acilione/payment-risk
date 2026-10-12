@@ -25,13 +25,27 @@ public class CustomerRiskProcessor
   private transient Counter late, updates, stale;
   private transient Map<String, Counter> decisions, matches;
   private transient org.apache.flink.runtime.metrics.DescriptiveStatisticsHistogram evaluation;
-  private transient Counter amount;
+  private transient Counter amount, pendingOverdue, frozenUpdates;
+  private transient ValueState<Long> pendingSince, pendingWatchdog;
+  private transient PolicyCatalog catalog;
+  private transient RollingFeatures rolling;
+  private transient PendingPayments queue;
+  private transient StateExpiryIndex expiry;
 
   public CustomerRiskProcessor(AppConfig config) {
     this.config = config;
   }
 
   public void open(OpenContext c) {
+    catalog = config.policyJson().isEmpty() ? null : PolicyCatalog.from(config);
+    pendingSince =
+        getRuntimeContext().getState(new ValueStateDescriptor<>("pending-since-v1", Types.LONG));
+    pendingWatchdog =
+        getRuntimeContext().getState(new ValueStateDescriptor<>("pending-watchdog-v1", Types.LONG));
+    pendingOverdue =
+        getRuntimeContext().getMetricGroup().counter("risk_pending_overdue_observations_total");
+    frozenUpdates =
+        getRuntimeContext().getMetricGroup().counter("risk_frozen_policy_updates_ignored_total");
     finalizedThrough =
         getRuntimeContext()
             .getState(new ValueStateDescriptor<>("finalized-through-v1", Types.LONG));
@@ -52,6 +66,9 @@ public class CustomerRiskProcessor
         getRuntimeContext().getState(new ValueStateDescriptor<>("history-count-v1", Types.INT));
     deviceCount =
         getRuntimeContext().getState(new ValueStateDescriptor<>("device-count-v1", Types.INT));
+    queue = new PendingPayments(getRuntimeContext(), pending);
+    rolling = new RollingFeatures(getRuntimeContext());
+    expiry = new StateExpiryIndex(getRuntimeContext(), config);
     var metrics = getRuntimeContext().getMetricGroup();
     late = metrics.counter("risk_transactions_late_total");
     updates = metrics.counter("risk_rule_updates_total");
@@ -82,17 +99,6 @@ public class CustomerRiskProcessor
     else s.update(value);
   }
 
-  private void scheduleCleanup(OnTimerContext ctx) throws Exception {
-    if (cleanupAt.value() != null) return;
-    long next = Long.MAX_VALUE;
-    for (long time : history.keys()) next = Math.min(next, time + config.historyMs());
-    for (long time : devices.values()) next = Math.min(next, time + config.deviceMs());
-    if (next != Long.MAX_VALUE) {
-      cleanupAt.update(next);
-      ctx.timerService().registerEventTimeTimer(next);
-    }
-  }
-
   private static List<JsonNode> rows(String json) {
     var result = new ArrayList<JsonNode>();
     if (json != null) Json.read(json).forEach(result::add);
@@ -100,6 +106,7 @@ public class CustomerRiskProcessor
   }
 
   private List<JsonNode> snapshot(ReadOnlyBroadcastState<String, String> state) throws Exception {
+    if (catalog != null) return catalog.rules();
     var rules = new TreeMap<String, JsonNode>();
     for (var r : Rules.defaults()) rules.put(r.path("rule_id").asText(), r);
     for (var e : state.immutableEntries()) rules.put(e.getKey(), Json.read(e.getValue()));
@@ -110,6 +117,10 @@ public class CustomerRiskProcessor
       throws Exception {
     var r = Json.read(value);
     Rules.validate(r, config);
+    if (catalog != null) {
+      frozenUpdates.inc();
+      return;
+    }
     var state = ctx.getBroadcastState(RULES);
     String id = r.path("rule_id").asText(), previous = state.get(id);
     long version = previous == null ? 1 : Json.read(previous).path("version").asLong();
@@ -146,66 +157,90 @@ public class CustomerRiskProcessor
     }
     if (count(pendingCount) >= config.maxEvents())
       throw new IllegalStateException("Customer pending state limit exceeded");
-    var bucket = rows(pending.get(t));
     var item = Json.object();
     item.set("transaction", tx);
+    item.put("queued_at", ctx.timerService().currentProcessingTime());
     item.set("rules", Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES))));
-    bucket.add(item);
-    pending.put(t, Json.write(bucket));
+    item.put("review_threshold", catalog == null ? config.review() : catalog.review());
+    item.put("reject_threshold", catalog == null ? config.reject() : catalog.reject());
+    item.put("policy_id", catalog == null ? "dynamic" : catalog.id());
+    item.put("policy_version", catalog == null ? 0 : catalog.version());
+    queue.add(t, item);
     pendingCount.update(count(pendingCount) + 1);
+    if (pendingSince.value() == null) {
+      long now = ctx.timerService().currentProcessingTime();
+      pendingSince.update(now);
+      pendingWatchdog.update(now + config.pendingAlertMs());
+      ctx.timerService().registerProcessingTimeTimer(now + config.pendingAlertMs());
+    }
     ctx.timerService().registerEventTimeTimer(t);
   }
 
   public void onTimer(long t, OnTimerContext ctx, Collector<String> out) throws Exception {
-    if (cleanupAt.value() != null && cleanupAt.value() == t) cleanupAt.clear();
-    // Clean only the timer's logical time, never a jumped watermark: earlier pending events still
-    // need history.
-    var expired = new ArrayList<Long>();
-    int removed = 0;
-    for (var e : history.entries())
-      if (e.getKey() <= t - config.historyMs()) {
-        expired.add(e.getKey());
-        removed += rows(e.getValue()).size();
+    if (ctx.timeDomain() == org.apache.flink.streaming.api.TimeDomain.PROCESSING_TIME) {
+      if (count(pendingCount) > 0) {
+        long oldest = ctx.timerService().currentProcessingTime();
+        oldest = queue.oldest(oldest);
+        pendingSince.update(oldest);
+        if (ctx.timerService().currentProcessingTime() - oldest >= config.pendingAlertMs()) {
+          pendingOverdue.inc();
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .warn(
+                  "event=pending_overdue age_ms={} pending_events={}",
+                  ctx.timerService().currentProcessingTime() - pendingSince.value(),
+                  count(pendingCount));
+        }
+        long next = ctx.timerService().currentProcessingTime() + config.pendingAlertMs();
+        pendingWatchdog.update(next);
+        ctx.timerService().registerProcessingTimeTimer(next);
       }
-    for (long k : expired) history.remove(k);
-    setCount(historyCount, count(historyCount) - removed);
-    var oldDevices = new ArrayList<String>();
-    for (var e : devices.entries())
-      if (e.getValue() <= t - config.deviceMs()) oldDevices.add(e.getKey());
-    for (String d : oldDevices) devices.remove(d);
-    setCount(deviceCount, count(deviceCount) - oldDevices.size());
-    var bucket = rows(pending.get(t));
+      return;
+    }
+    if (cleanupAt.value() != null && cleanupAt.value() == t) cleanupAt.clear();
+    // Feature expirations run before deleting their source bucket, using this timer's time.
+    rolling.expire(t, history);
+    int[] removed = expiry.expire(t, history, devices, ctx.timerService());
+    setCount(historyCount, count(historyCount) - removed[0]);
+    setCount(deviceCount, count(deviceCount) - removed[1]);
+    var bucket = queue.drain(t);
     if (bucket.isEmpty()) {
-      if (count(historyCount) == 0 && count(deviceCount) == 0 && count(pendingCount) == 0)
+      if (count(historyCount) == 0 && count(deviceCount) == 0 && count(pendingCount) == 0) {
         finalizedThrough.clear();
-      scheduleCleanup(ctx);
+        expiry.clear();
+      }
+      if (count(historyCount) == 0 && count(pendingCount) == 0) rolling.clear();
       return;
     }
     bucket.sort(Comparator.comparing(n -> n.path("transaction").path("event_id").asText()));
-    var recent = new ArrayList<JsonNode>();
-    for (String value : history.values()) recent.addAll(rows(value));
-    var known = new HashMap<String, Long>();
-    for (var e : devices.entries()) known.put(e.getKey(), e.getValue());
     var current = rows(history.get(t));
+    var recent = StateHistory.read(history, t, current);
     for (var item : bucket) {
       if (count(historyCount) >= config.maxEvents())
         throw new IllegalStateException("Customer history state limit exceeded");
       var tx = item.path("transaction");
       String device = tx.path("device_id").asText();
-      if (!known.containsKey(device) && count(deviceCount) >= config.maxDevices())
+      Long lastSeen = devices.get(device);
+      if (lastSeen == null && count(deviceCount) >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
       var rules = new ArrayList<JsonNode>();
       item.path("rules").forEach(rules::add);
       long started = System.nanoTime();
+      boolean incremental = rolling.active() || count(historyCount) >= 64;
       var decision =
           RiskEngine.evaluate(
               tx,
-              recent,
-              known,
               rules,
-              config.review(),
-              config.reject(),
-              System.currentTimeMillis());
+              item.path("review_threshold").asInt(config.review()),
+              item.path("reject_threshold").asInt(config.reject()),
+              System.currentTimeMillis(),
+              incremental
+                  ? rolling.observe(tx, recent, lastSeen, rules, ctx.timerService())
+                  : RiskFeatures.observe(tx, recent, lastSeen, rules));
+      Audit.attachPolicy(
+          decision,
+          tx,
+          item.path("policy_id").asText("dynamic"),
+          item.path("policy_version").asLong());
       evaluation.update((System.nanoTime() - started) / 1000);
       amount.inc(tx.path("amount_minor").asLong());
       out.collect(Json.write(decision));
@@ -218,17 +253,31 @@ public class CustomerRiskProcessor
               .put("currency", tx.path("currency").asText())
               .put("device_id", device)
               .put("status", tx.path("status").asText());
-      recent.add(feature);
+      expiry.deviceSeen(
+          device,
+          lastSeen,
+          t,
+          ctx.timerService(),
+          time ->
+              queue.contains(time)
+                  || history.contains(time - config.historyMs())
+                  || rolling.hasExpiry(time, history)
+                  || (cleanupAt.value() != null && cleanupAt.value() == time));
+      if (incremental) rolling.add(feature, ctx.timerService());
       current.add(feature);
       historyCount.update(count(historyCount) + 1);
-      if (!known.containsKey(device)) deviceCount.update(count(deviceCount) + 1);
-      known.put(device, t);
+      if (lastSeen == null) deviceCount.update(count(deviceCount) + 1);
       devices.put(device, t);
     }
     history.put(t, Json.write(current));
+    ctx.timerService().registerEventTimeTimer(t + config.historyMs());
     finalizedThrough.update(t);
-    pending.remove(t);
     setCount(pendingCount, count(pendingCount) - bucket.size());
-    scheduleCleanup(ctx);
+    if (count(pendingCount) == 0) {
+      if (pendingWatchdog.value() != null)
+        ctx.timerService().deleteProcessingTimeTimer(pendingWatchdog.value());
+      pendingWatchdog.clear();
+      pendingSince.clear();
+    }
   }
 }
