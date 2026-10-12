@@ -9,7 +9,9 @@ export function analyticsStore(
     for (const [key, value] of Object.entries(parameters))
       url.searchParams.set(`param_${key}`, String(value));
     url.searchParams.set("wait_end_of_query", "1");
-    const settings = ` SETTINGS readonly=${writable ? 0 : 1}, max_execution_time=${writable ? 60 : 4}, max_memory_usage=${writable ? 536870912 : 268435456}, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864`;
+    // Bound both aggregation concurrency and INSERT SELECT buffering. Spill alone
+    // does not keep large output blocks inside the per-query memory budget.
+    const settings = ` SETTINGS readonly=${writable ? 0 : 1}, max_execution_time=${writable ? 60 : 4}, max_threads=${writable ? 2 : 4}, max_block_size=8192, min_insert_block_size_rows=8192, min_insert_block_size_bytes=16777216, max_memory_usage=${writable ? 536870912 : 268435456}, max_bytes_before_external_group_by=67108864, max_bytes_before_external_sort=67108864`;
     const response = await fetcher(url.toString(), {
       method: "POST",
       signal: AbortSignal.timeout(writable ? 65000 : 5000),

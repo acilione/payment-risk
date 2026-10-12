@@ -45,7 +45,7 @@ jobs:
         run: |
           node --env-file=.env scripts/benchmark-investigation.mjs
           cp artifacts/investigation-load.json artifacts/investigation-direct.json
-          RISK_QUERY_MODE=snapshot node --env-file=.env scripts/benchmark-investigation.mjs
+          RISK_QUERY_MODE=snapshot RISK_QUERY_STAGES=1000,10000,50000,250000 node --env-file=.env scripts/benchmark-investigation.mjs
           cp artifacts/investigation-load.json artifacts/investigation-snapshot.json
       - run: python3 scripts/verify-materializer.py
       - run: make stop-job && python3 scripts/verify-ingress.py

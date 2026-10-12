@@ -555,5 +555,181 @@
         "web/server/serving-reader.mjs": "114a0f690f27cd568d2936b08619022c180afeb066fd5e68c73002060a61c540"
       }
     }
+  },
+  "larger_dataset": {
+    "before_buffer_limits": {
+      "sourceCommit": "0ebc2f34b31f8557a671cbbc4d4c536ce32607ba",
+      "generatedAt": "2026-10-12T12:44:37.290Z",
+      "environment": {
+        "platform": "linux",
+        "cpus": 20,
+        "memoryBytes": 16605831168
+      },
+      "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+      "budgets": {
+        "requestP95Ms": 2000,
+        "errors": 0
+      },
+      "queryErrors": [
+        {
+          "status": 500,
+          "detail": "Code: 241. DB::Exception: Query memory limit exceeded: would use 581.20 MiB (attempt to allocate chunk of 93.34 MiB), maximum: 512.00 MiB. (MEMORY_LIMIT_EXCEEDED) (version 26.8.2.7 (official build))\n"
+        }
+      ],
+      "workload": {
+        "mode": "snapshot",
+        "stages": [
+          250000
+        ],
+        "concurrencies": [
+          1,
+          4
+        ],
+        "rounds": 3,
+        "customers": 1000,
+        "retryPercent": 10
+      },
+      "stages": [
+        {
+          "logicalPayments": 250000,
+          "physicalDeliveries": 275000,
+          "checks": [],
+          "measurements": []
+        }
+      ],
+      "sourceDirty": false,
+      "sourceHashes": {
+        "infrastructure/docker/clickhouse.sql": "610540da11913368538efb26d3f8cbe5365f81cd3a5600714ce64ddf0ae310a8",
+        "web/server/investigation.mjs": "a14638ef0f2b05debdbcb0f905ece77540862b6a5319a050977d460952b8d830",
+        "web/server/overview.mjs": "2fc4dd1fe7f3179d2b466e62a7caeab3469eeb18ef7c183d0ae5e08778042abe",
+        "scripts/benchmark-investigation.mjs": "89751b7ecbcd710c1f15e82ab24a854a9feef9ee93d58bd5614a42c05398696f",
+        "web/server/analytics-publisher.mjs": "4702c65378cfe1df7bd1b91d94bbe8f6c6035eaebdbcb15775d51ff7728132c7",
+        "web/server/serving-reader.mjs": "ebbcaad26c4a09b1e1a6e97d6102d7e58a4e57fd1f2ff3423fbe8085d79b817c"
+      }
+    },
+    "after_buffer_limits": {
+      "sourceCommit": "0ebc2f34b31f8557a671cbbc4d4c536ce32607ba",
+      "generatedAt": "2026-10-12T12:47:17.193Z",
+      "environment": {
+        "platform": "linux",
+        "cpus": 20,
+        "memoryBytes": 16605831168
+      },
+      "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+      "budgets": {
+        "requestP95Ms": 2000,
+        "errors": 0
+      },
+      "queryErrors": [],
+      "workload": {
+        "mode": "snapshot",
+        "stages": [
+          250000
+        ],
+        "concurrencies": [
+          1,
+          4
+        ],
+        "rounds": 3,
+        "customers": 1000,
+        "retryPercent": 10
+      },
+      "stages": [
+        {
+          "logicalPayments": 250000,
+          "physicalDeliveries": 275000,
+          "checks": [
+            "Complete immutable generation; exact logical count and delivery coverage",
+            "250 customer payments paginated; physical retries counted once",
+            "Late content conflict blocks new publication and prevents fallback to previous ready generation"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 11.334515000002284,
+              "p95Ms": 12.46296699999948,
+              "maxMs": 12.46296699999948,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 16.259388000005856,
+              "p95Ms": 18.727168999997957,
+              "maxMs": 18.727168999997957,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 29.335265000001527,
+              "p95Ms": 32.23115899999539,
+              "maxMs": 32.23115899999539,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 40.41589199999726,
+              "p95Ms": 43.80141400000139,
+              "maxMs": 43.80141400000139,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 12.19434999999794,
+              "p95Ms": 12.20044699999562,
+              "maxMs": 12.20044699999562,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 18.440669000003254,
+              "p95Ms": 26.83034200000111,
+              "maxMs": 26.83034200000111,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ],
+          "publication": {
+            "generation": "f1fb469b-0dae-489b-b2aa-90f90d17456e",
+            "startedAt": 1791809282636,
+            "assessments": 250000,
+            "deliveries": 275000,
+            "buildMs": 4764.613411999999
+          }
+        }
+      ],
+      "sourceDirty": true,
+      "sourceHashes": {
+        "infrastructure/docker/clickhouse.sql": "610540da11913368538efb26d3f8cbe5365f81cd3a5600714ce64ddf0ae310a8",
+        "web/server/investigation.mjs": "a14638ef0f2b05debdbcb0f905ece77540862b6a5319a050977d460952b8d830",
+        "web/server/overview.mjs": "2fc4dd1fe7f3179d2b466e62a7caeab3469eeb18ef7c183d0ae5e08778042abe",
+        "scripts/benchmark-investigation.mjs": "2cd6c9d7cb135cc0b7167619156e976814be9304c3a8d61db904ffe6f789d445",
+        "web/server/analytics-publisher.mjs": "4702c65378cfe1df7bd1b91d94bbe8f6c6035eaebdbcb15775d51ff7728132c7",
+        "web/server/analytics-store.mjs": "3ab000a90a550c3a36c4136a07315d456b7b85de02a761d94d481e66363542cc",
+        "web/server/serving-reader.mjs": "ebbcaad26c4a09b1e1a6e97d6102d7e58a4e57fd1f2ff3423fbe8085d79b817c"
+      }
+    }
   }
 }

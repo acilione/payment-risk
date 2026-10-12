@@ -128,6 +128,7 @@ report.sourceHashes = Object.fromEntries(
       "web/server/overview.mjs",
       "scripts/benchmark-investigation.mjs",
       "web/server/analytics-publisher.mjs",
+      "web/server/analytics-store.mjs",
       "web/server/serving-reader.mjs",
     ].map(async (path) => [
       path,
