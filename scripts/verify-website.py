@@ -33,10 +33,15 @@ with sync_playwright() as p:
             run = run_response.json()
             assert run['status'] == 'COMPLETE'
             page.get_by_role('button', name='Showcase', exact=True).click()
-            expect(page.locator('.showcase-flow article').last.locator('strong')).to_have_text(str(run['stored_decisions']))
+            expect(page.locator('.showcase-flow article').last.locator('strong')).to_have_text(f"{run['stored_decisions']:,}")
             example = next(c for c in run['customers'] if c['profile'] == 'takeover')
             page.locator('.showcase-examples button').filter(has_text='Account takeover').click()
-            expect(page.locator('.payment-timeline li')).to_have_count(example['payments'])
+            expect(page.locator('.payment-timeline li')).to_have_count(min(20, example['payments']))
+            if example['payments'] > 20:
+                page.get_by_role('button', name='Older payments', exact=True).click()
+                expect(page.locator('.payment-timeline li')).to_have_count(min(20, example['payments'] - 20))
+                page.get_by_role('button', name='Newest payments', exact=True).click()
+                expect(page.locator('.payment-timeline li')).to_have_count(20)
             expect(page.locator('.evidence-rule')).to_have_count(5)
             evidence['checks'].append('live run report and generated customer history read from ClickHouse')
             page.get_by_role('button', name='Overview', exact=True).click()
@@ -53,7 +58,7 @@ with sync_playwright() as p:
     for payment in sorted(expected, key=lambda d: (d["event_time"], d["evaluation_id"]), reverse=True)[:100]:
         expect(page.get_by_role('button', name='Inspect ' + payment['transaction_id'], exact=True)).to_be_visible()
     page.get_by_role('button', name='Overview', exact=True).click()
-    expect(page.locator('.stat-value').first).to_have_text(str(len(expected)))
+    expect(page.locator('.stat-value').first).to_have_text(f"{len(expected):,}")
     expected_amount = sum(d['amount_minor'] for d in expected) / 100
     expect(page.locator('.stat-value').nth(1)).to_have_text(f'\u20ac{expected_amount:,.2f}')
     page.get_by_role('button', name='Transactions', exact=True).click()
@@ -111,7 +116,7 @@ with sync_playwright() as p:
     evidence['checks'].append('investigation search, timeline, all rule evidence, false alarm, missed detection and mobile layout')
     page.get_by_role('button', name='Showcase', exact=True).click()
     expect(page.locator('.showcase-status')).to_have_text('COMPLETE')
-    expect(page.locator('.showcase-flow article').last.locator('strong')).to_have_text(str(fixture['provenance']['stored_decisions']))
+    expect(page.locator('.showcase-flow article').last.locator('strong')).to_have_text(f"{fixture['provenance']['stored_decisions']:,}")
     expect(page.locator('.showcase-examples button')).to_have_count(len({c['profile'] for c in fixture['cases']}))
     page.evaluate('scrollTo(0, 0)')
     page.screenshot(path=str(out / 'showcase-desktop.png'), full_page=True)

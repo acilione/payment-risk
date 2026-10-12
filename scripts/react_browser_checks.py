@@ -51,10 +51,10 @@ def verify_request_lifecycle(browser, url, snapshot):
         page.get_by_label("Time window").select_option("24h")
         wait_for_requests(page, pending, 3)
         page.get_by_role("button", name="View demo", exact=True).click()
-        expect(page.locator(".stat-value").first).to_have_text(str(snapshot["provenance"]["exported_payments"]))
+        expect(page.locator(".stat-value").first).to_have_text(f"{snapshot['provenance']['exported_payments']:,}")
         fulfill(pending[2], overview)
         page.wait_for_timeout(50)
-        expect(page.locator(".stat-value").first).to_have_text(str(snapshot["provenance"]["exported_payments"]))
+        expect(page.locator(".stat-value").first).to_have_text(f"{snapshot['provenance']['exported_payments']:,}")
     finally:
         context.close()
 

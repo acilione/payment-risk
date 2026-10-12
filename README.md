@@ -931,6 +931,8 @@ python3 scripts/benchmark-pipeline.py --config config/showcase-load.json
 
 This configuration generates 10,000 business payments across 200 customers, plus retries and invalid/late inputs. The report records exact reconciliation, producer-to-first-database-write p50/p95/p99 latency, and sampled ingestion metrics under `artifacts/pipeline-load/`. Samples stream to disk; latency reconciliation reads pages of 200 records and computes quantiles in SQLite. Add `--database-outage` to include recovery and replay, or `--no-build` when the current images are already built. The existing showcase preserves chronological history on one input partition; these measurements are a reproducible functional load test, not a multi-partition bank-capacity result. Outage time and watermark/checkpoint waiting are included in the reported latency.
 
+The [12 October outage run](docs/evidence/pipeline-load-recovery-2026-10-12.json) archived all 11,012 source records: 10,000 assessed payments, 1,007 retries, one invalid record, one late payment and three controls. Kafka consumer offsets stayed unchanged during the outage. Replaying all 10,000 assessments preserved the logical count, and reconciliation found zero unresolved inputs. Producer-to-first-insert p95 was 151.4 seconds and p99 157.7 seconds **including the planned database outage**; these are recovery-run latencies, not normal-operation latency targets. Producer execution took 95.5 seconds including checkpoint and final-assessment waits, so the configured 500 payments/second must not be presented as achieved throughput.
+
 The isolated SQL benchmark also accepts larger datasets and more repeated requests:
 
 ```bash
