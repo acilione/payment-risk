@@ -38,7 +38,11 @@ public final class ClickHouseWriter {
   }
 
   public void insert(String table, String rows) throws IOException, InterruptedException {
-    if (!Set.of("risk.evaluations", "risk.materializer_rejections", "risk.payment_ingress")
+    if (!Set.of(
+            "risk.evaluations",
+            "risk.materializer_rejections",
+            "risk.payment_ingress",
+            "risk.processing_outcomes")
         .contains(table)) throw new IllegalArgumentException("Unknown insertion target");
     if (!rows.isEmpty()) execute("INSERT INTO " + table + " FORMAT JSONEachRow\n" + rows, true);
   }

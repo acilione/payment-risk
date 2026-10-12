@@ -1,3 +1,4 @@
+import type { DecisionKind } from "./types";
 export interface RuleEvidence {
   rule_id: string;
   rule_version: number;
@@ -18,7 +19,7 @@ export interface InvestigationDecision {
   amount_minor: number;
   currency: string;
   risk_score: number;
-  decision: string;
+  decision: DecisionKind;
   event_time: number;
   processed_at: number;
   engine_version: string;

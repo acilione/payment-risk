@@ -24,10 +24,17 @@ public final class ConsumerOffsets {
                     .getOrDefault("MATERIALIZER_GROUP", "risk-clickhouse-evaluations-v2"));
     var topics =
         Map.of(
-            "archive", config.topic("payments.raw"), "decisions", config.topic("risk.decisions"));
+            "archive",
+            config.topic("payments.raw"),
+            "decisions",
+            config.topic("risk.decisions"),
+            "invalid",
+            config.topic("payments.dlq"),
+            "late",
+            config.topic("payments.late"));
     var result = Json.object();
     try (var admin = Admin.create(properties)) {
-      for (var kind : List.of("archive", "decisions")) {
+      for (var kind : List.of("archive", "decisions", "invalid", "late")) {
         String topic = topics.get(kind);
         var description = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
         var requests = new HashMap<TopicPartition, OffsetSpec>();
@@ -37,7 +44,11 @@ public final class ConsumerOffsets {
                 p -> requests.put(new TopicPartition(topic, p.partition()), OffsetSpec.latest()));
         var ends = admin.listOffsets(requests).all().get();
         var offsets =
-            admin.listConsumerGroupOffsets(groups.get(kind)).partitionsToOffsetAndMetadata().get();
+            admin
+                .listConsumerGroupOffsets(
+                    groups.get(kind.equals("archive") ? "archive" : "decisions"))
+                .partitionsToOffsetAndMetadata()
+                .get();
         var entries = result.putArray(kind);
         for (var partition : description.partitions()) {
           var tp = new TopicPartition(topic, partition.partition());

@@ -82,9 +82,9 @@ export function TransactionsTable({
             onChange={(e) => onFilterChange(e.target.value as DecisionFilter)}
           >
             <option value="ALL">All decisions</option>
-            <option value="APPROVE">Approved</option>
-            <option value="REVIEW">Review</option>
-            <option value="REJECT">Rejected</option>
+            <option value="APPROVE">{decisionLabels.APPROVE}</option>
+            <option value="REVIEW">{decisionLabels.REVIEW}</option>
+            <option value="REJECT">{decisionLabels.REJECT}</option>
           </select>
           <ChevronDown size={13} />
         </label>

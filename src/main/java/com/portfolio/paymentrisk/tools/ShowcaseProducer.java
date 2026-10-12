@@ -6,8 +6,10 @@ import com.portfolio.paymentrisk.domain.Audit;
 import com.portfolio.paymentrisk.serialization.AvroCodec;
 import com.portfolio.paymentrisk.tools.generation.*;
 import java.nio.file.*;
+import java.time.Duration;
 import java.util.*;
 import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.*;
@@ -15,7 +17,11 @@ import org.apache.kafka.common.serialization.*;
 /** Sends generated inputs only; classification is performed by the running Flink job. */
 public final class ShowcaseProducer {
   public static void main(String[] args) throws Exception {
-    if (args.length != 2) throw new IllegalArgumentException("Usage: CONFIG_JSON RUN_ID");
+    if (args.length < 2
+        || args.length > 3
+        || (args.length == 3 && !args[2].equals("--include-outcomes")))
+      throw new IllegalArgumentException("Usage: CONFIG_JSON RUN_ID [--include-outcomes]");
+    boolean includeOutcomes = args.length == 3;
     var configJson = Json.read(Files.readString(Path.of(args[0])));
     var generatorConfig = GeneratorConfig.parse(configJson);
     if (args[1].equals("--validate")) {
@@ -59,17 +65,21 @@ public final class ShowcaseProducer {
             .put("run_id", args[1])
             .put("generator_version", GeneratedPayments.VERSION)
             .put("event_time_anchor", anchor)
-            .put("expected_payments", generator.size())
+            .put("expected_payments", generator.size() + (includeOutcomes ? 1 : 0))
             .put("input_topic", c.topic("payments.raw"))
-            .put("decision_topic", c.topic("risk.decisions"));
+            .put("decision_topic", c.topic("risk.decisions"))
+            .put("dlq_topic", c.topic("payments.dlq"))
+            .put("late_topic", c.topic("payments.late"));
     start.set("config", configJson);
     start.set("customers", Json.MAPPER.valueToTree(generator.customers()));
     emit(start);
     long begun = System.nanoTime(), nextOffset = 0;
     int unique = 0, deliveries = 0;
+    com.fasterxml.jackson.databind.JsonNode lastPayment = null;
     try (var producer = new KafkaProducer<String, byte[]>(props)) {
       for (var sample : generator) {
         var tx = sample.value();
+        lastPayment = tx;
         tx.put("producer_time", System.currentTimeMillis());
         var bytes = codec.encode(c.topic("payments.raw"), "transaction", Json.write(tx));
         for (int copy = 0; copy < (sample.retry() ? 2 : 1); copy++) {
@@ -115,15 +125,78 @@ public final class ShowcaseProducer {
                 .put("source_offset", m.offset())
                 .put("payload_sha256", Audit.sha256(bytes)));
       }
+      if (includeOutcomes) {
+        // A committed assessment proves finalization for this customer even while ClickHouse is
+        // down.
+        awaitAssessment(c, codec, lastPayment.path("event_id").asText());
+        var late =
+            IntegrationScenario.transaction(
+                args[1] + "-payment-late",
+                lastPayment.path("customer_id").asText(),
+                lastPayment.path("event_time").asLong() - 1,
+                100,
+                "late-device",
+                "APPROVED");
+        var bytes = codec.encode(c.topic("payments.raw"), "transaction", Json.write(late));
+        var metadata =
+            producer
+                .send(
+                    new ProducerRecord<>(
+                        c.topic("payments.raw"), 0, late.path("customer_id").asText(), bytes))
+                .get();
+        var row =
+            Json.object()
+                .put("kind", "late")
+                .put("source_partition", metadata.partition())
+                .put("source_offset", metadata.offset())
+                .put("payload_sha256", Audit.sha256(bytes));
+        row.set("payment", late);
+        emit(row);
+        // An undecodable input has no trustworthy event ID; reconciliation must use coordinates and
+        // wire hash.
+        byte[] invalid = new byte[] {99};
+        metadata =
+            producer
+                .send(new ProducerRecord<>(c.topic("payments.raw"), 0, "invalid", invalid))
+                .get();
+        emit(
+            Json.object()
+                .put("kind", "invalid")
+                .put("source_partition", metadata.partition())
+                .put("source_offset", metadata.offset())
+                .put("payload_sha256", Audit.sha256(invalid)));
+      }
     }
     emit(
         Json.object()
             .put("kind", "complete")
-            .put("acknowledged_payments", unique)
-            .put("acknowledged_deliveries", deliveries)
+            .put("acknowledged_payments", unique + (includeOutcomes ? 1 : 0))
+            .put("acknowledged_deliveries", deliveries + (includeOutcomes ? 2 : 0))
             .put("transport_retries", deliveries - unique)
             .put("control_records", partitions.size())
             .put("producer_elapsed_ms", (System.nanoTime() - begun) / 1000000));
+  }
+
+  private static void awaitAssessment(AppConfig config, AvroCodec codec, String eventId)
+      throws Exception {
+    var props =
+        com.portfolio.paymentrisk.storage.KafkaIngestion.properties(
+            config, "showcase-proof-" + UUID.randomUUID(), false);
+    props.put("auto.offset.reset", "earliest");
+    long deadline = System.nanoTime() + Duration.ofSeconds(180).toNanos();
+    try (var consumer = new KafkaConsumer<String, byte[]>(props)) {
+      consumer.subscribe(List.of(config.topic("risk.decisions")));
+      while (System.nanoTime() < deadline) {
+        for (var record : consumer.poll(Duration.ofSeconds(1))) {
+          if (Json.read(codec.decode(record.value(), "risk-decision"))
+              .path("event_id")
+              .asText()
+              .equals(eventId)) return;
+        }
+      }
+    }
+    throw new IllegalStateException(
+        "Final assessment was not committed; cannot demonstrate a late input");
   }
 
   private static void emit(Object row) {

@@ -38,7 +38,7 @@ export function RulesPage({ data }: { data: Overview | null }) {
         ))}
       </div>
       <section className="card score-guide">
-        <h2>Decision thresholds</h2>
+        <h2>Risk thresholds</h2>
         <p>
           The score is the sum of matched rule weights, capped at 100. These are
           the default thresholds; they can be changed in the deployment
@@ -46,13 +46,13 @@ export function RulesPage({ data }: { data: Overview | null }) {
         </p>
         <div>
           <span className="approve">
-            <strong>0–29</strong>Approve
+            <strong>0–29</strong>Low risk
           </span>
           <span className="review">
-            <strong>30–69</strong>Review
+            <strong>30–69</strong>Needs review
           </span>
           <span className="reject">
-            <strong>70–100</strong>Reject
+            <strong>70–100</strong>High risk
           </span>
         </div>
       </section>

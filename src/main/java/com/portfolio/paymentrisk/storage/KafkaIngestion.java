@@ -45,8 +45,15 @@ public final class KafkaIngestion {
       org.apache.kafka.clients.consumer.Consumer<K, byte[]> consumer,
       String topic,
       boolean allowNewLocalGroup) {
+    subscribe(consumer, List.of(topic), allowNewLocalGroup);
+  }
+
+  public static <K> void subscribe(
+      org.apache.kafka.clients.consumer.Consumer<K, byte[]> consumer,
+      Collection<String> topics,
+      boolean allowNewLocalGroup) {
     consumer.subscribe(
-        List.of(topic),
+        topics,
         new org.apache.kafka.clients.consumer.ConsumerRebalanceListener() {
           public void onPartitionsRevoked(
               Collection<org.apache.kafka.common.TopicPartition> partitions) {}

@@ -136,7 +136,7 @@ export function Investigations({
               <h2>Choose a customer to begin</h2>
               <p>
                 Open a guided example or search by customer ID. Timelines show
-                evaluated payments, including approvals.
+                evaluated payments, including low-risk assessments.
               </p>
             </section>
           ) : timelineError ? (

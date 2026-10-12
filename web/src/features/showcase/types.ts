@@ -23,6 +23,22 @@ export type ShowcaseReport = {
     evaluated: number;
     missing_archive: number;
     without_decision: number;
+    invalid_inputs?: number;
+    invalid_input_examples?: {
+      partition: number;
+      offset: string;
+      reason: string;
+    }[];
+    late_payment_examples?: {
+      event_id: string;
+      reason: string;
+      lateness_ms: number;
+    }[];
+    invalid_payments?: number;
+    late_payments?: number;
+    unresolved_inputs?: number;
+    unresolved_input_examples?: { partition: number; offset: string }[];
+    control_records?: number;
     missing_payment_examples?: string[];
     missing_input_examples?: { partition: number; offset: string }[];
   };

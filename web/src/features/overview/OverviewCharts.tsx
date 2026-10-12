@@ -27,7 +27,7 @@ export function OverviewCharts({
         <section className="card trend-card">
           <div className="card-heading">
             <div>
-              <h2>Decisions over time</h2>
+              <h2>Risk assessments over time</h2>
               <p>
                 {demo
                   ? "Counts by payment event time"
@@ -49,15 +49,15 @@ export function OverviewCharts({
             <div className="legend">
               <span>
                 <i className="green" />
-                Approved
+                Low risk
               </span>
               <span>
                 <i className="amber" />
-                Review
+                Needs review
               </span>
               <span>
                 <i className="coral" />
-                Rejected
+                High risk
               </span>
             </div>
           </div>
@@ -66,8 +66,8 @@ export function OverviewCharts({
         <section className="card distribution">
           <div className="card-heading">
             <div>
-              <h2>Decision breakdown</h2>
-              <p>Share of approved, review, and rejected payments</p>
+              <h2>Risk breakdown</h2>
+              <p>Share of low-risk, review, and high-risk assessments</p>
             </div>
             <ShieldCheck size={18} className="muted" />
           </div>
@@ -75,7 +75,7 @@ export function OverviewCharts({
             <svg
               viewBox="0 0 180 180"
               role="img"
-              aria-label={`${approval}% approved`}
+              aria-label={`${approval}% low risk`}
             >
               <circle
                 cx="90"
@@ -110,20 +110,24 @@ export function OverviewCharts({
                 {approval}%
               </text>
               <text x="90" y="109" textAnchor="middle" className="donut-label">
-                APPROVED
+                LOW RISK
               </text>
             </svg>
           </div>
           <div className="breakdown-rows">
             {[
               {
-                name: "Approved",
+                name: "Low risk",
                 count: totals?.approved ?? 0,
                 color: "green",
               },
-              { name: "Review", count: totals?.review ?? 0, color: "amber" },
               {
-                name: "Rejected",
+                name: "Needs review",
+                count: totals?.review ?? 0,
+                color: "amber",
+              },
+              {
+                name: "High risk",
                 count: totals?.rejected ?? 0,
                 color: "coral",
               },

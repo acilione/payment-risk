@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import operations
+from reconcile_outcomes import reconcile_outcomes
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / "artifacts/showcase"
@@ -84,17 +85,23 @@ def ledger(path):
     """)
     if "archived" not in {row[1] for row in db.execute("PRAGMA table_info(inputs)")}:
         db.execute("ALTER TABLE inputs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+    for name, definition in [("kind", "TEXT NOT NULL DEFAULT 'unknown'"), ("event_id", "TEXT NOT NULL DEFAULT ''"), ("invalid", "INTEGER NOT NULL DEFAULT 0")]:
+        if name not in {row[1] for row in db.execute("PRAGMA table_info(inputs)")}:
+            db.execute(f"ALTER TABLE inputs ADD COLUMN {name} {definition}")
+    db.execute("CREATE INDEX IF NOT EXISTS inputs_event ON inputs(event_id)")
+    if "late" not in {row[1] for row in db.execute("PRAGMA table_info(payments)")}:
+        db.execute("ALTER TABLE payments ADD COLUMN late TEXT")
     return db
 
 def record(db, row):
-    if row["kind"] not in ("payment", "marker"):
+    if row["kind"] not in ("payment", "marker", "invalid", "late"):
         return
-    db.execute("INSERT INTO inputs(partition,offset,hash) VALUES(?,?,?)", (row["source_partition"], row["source_offset"], row["payload_sha256"]))
-    if row["kind"] == "payment" and not row["retry"]:
+    db.execute("INSERT INTO inputs(partition,offset,hash,kind,event_id) VALUES(?,?,?,?,?)", (row["source_partition"], row["source_offset"], row["payload_sha256"], row["kind"], row.get("payment", {}).get("event_id", "")))
+    if row["kind"] in ("payment", "late") and not row.get("retry", False):
         payment = row["payment"]
         facts = {k: v for k, v in payment.items() if k != "producer_time"}
         digest = hashlib.sha256(json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        db.execute("INSERT INTO payments VALUES(?,?,?,?,NULL)", (payment["event_id"], payment["customer_id"], digest, json.dumps(payment)))
+        db.execute("INSERT INTO payments(id,customer,hash,payload,decision) VALUES(?,?,?,?,NULL)", (payment["event_id"], payment["customer_id"], digest, json.dumps(payment)))
 
 
 def reconcile(db, report, require_complete=True):
@@ -140,18 +147,19 @@ def reconcile(db, report, require_complete=True):
             row["rule_evidence"] = json.loads(row["rule_evidence"])
             db.execute("UPDATE payments SET decision=? WHERE id=?", (json.dumps(row), after))
             decisions += 1
+    outcomes = reconcile_outcomes(db, report, sql)
     db.commit()
     report["reconciliation"] = {
         "checked_at": now(), "verified": True,
-        "scope": "Acknowledged inputs and generated payments in this run",
-        "archived": archived, "evaluated": decisions,
+        "scope": "Acknowledged inputs in this run; control records require archiving only",
+        "archived": archived, "evaluated": decisions, **outcomes,
         "missing_archive": db.execute("SELECT count(*) FROM inputs WHERE archived=0").fetchone()[0],
         "without_decision": db.execute("SELECT count(*) FROM payments WHERE decision IS NULL").fetchone()[0],
         "missing_input_examples": [{"partition": p, "offset": str(o)} for p, o in db.execute("SELECT partition,offset FROM inputs WHERE archived=0 ORDER BY partition,offset LIMIT 10")],
-        "missing_payment_examples": [row[0] for row in db.execute("SELECT id FROM payments WHERE decision IS NULL ORDER BY id LIMIT 10")],
+        "missing_payment_examples": outcomes["unresolved_payment_examples"],
     }
-    if require_complete and decisions != report["expected_payments"]:
-        raise AssertionError("Missing logical decisions")
+    if require_complete and (outcomes["unresolved_inputs"] or decisions + outcomes["late_payments"] + outcomes["invalid_payments"] != report["expected_payments"]):
+        raise AssertionError("Missing processing outcomes")
     return archived, decisions
 
 
@@ -198,7 +206,7 @@ def complete_report(report, run_dir):
         for block in iter(lambda: source.read(65536), b""):
             digest.update(block)
     report["input_log_sha256"] = digest.hexdigest()
-    report["verification"] = "Every acknowledged Kafka coordinate and payload hash archived; exactly one matching logical decision per generated payment."
+    report["verification"] = "Every acknowledged input archived and accounted for as evaluated, invalid, late, or a control record. Retries do not inflate logical assessments."
     report["status"] = "COMPLETE"
     report.pop("error", None)
 
@@ -211,7 +219,7 @@ def export_snapshot(report, db, target):
     for customer in report["customers"]:
         if size + customer["payments"] > 1000:
             continue
-        rows = db.execute("SELECT payload, decision FROM payments WHERE customer=? ORDER BY id", (customer["id"],))
+        rows = db.execute("SELECT payload, decision FROM payments WHERE customer=? AND decision IS NOT NULL ORDER BY id", (customer["id"],))
         timeline = [{"payment": json.loads(p), "decision": json.loads(d)} for p, d in rows]
         if len(timeline) != customer["payments"]:
             raise AssertionError("Incomplete customer history")
@@ -285,7 +293,7 @@ def run(args):
         publish()
         compose("cp", str(run_dir / "config.json"), "jobmanager:/tmp/showcase-config.json")
         with ledger(run_dir / "ledger.sqlite") as db, (run_dir / "inputs.jsonl").open("w") as output, (run_dir / "producer.log").open("w") as errors:
-            process = subprocess.Popen([*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS, "/tmp/showcase-config.json", run_id],
+            process = subprocess.Popen([*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS, "/tmp/showcase-config.json", run_id, *(["--include-outcomes"] if args.include_outcomes else [])],
                                        cwd=ROOT, env=compose_environment(), stdout=subprocess.PIPE, stderr=errors, text=True)
             last_progress = time.monotonic()
             try:
@@ -354,8 +362,11 @@ def run(args):
                     time.sleep(3)
                     continue
                 publish()
-                if report["archived_records"] >= report["acknowledged_deliveries"] + report["control_records"] and report["stored_decisions"] >= report["expected_payments"]:
-                    break
+                if report["archived_records"] >= report["acknowledged_deliveries"] + report["control_records"]:
+                    report["archived_records"], report["stored_decisions"] = reconcile(db, report, require_complete=False)
+                    publish()
+                    if not report["reconciliation"]["unresolved_inputs"]:
+                        break
                 if time.monotonic() > deadline:
                     reconcile(db, report, require_complete=False)
                     publish()
@@ -373,7 +384,7 @@ def run(args):
                     raise AssertionError("Decision replay did not complete cleanly")
                 report["archived_records"], report["stored_decisions"] = reconcile(db, report)
                 report["recovery"].update(stage="COMPLETE", completed_at=now(), replay=replay_report,
-                    offsets_after=consumer_offsets(), verification="Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical result per payment.")
+                    offsets_after=consumer_offsets(), verification="Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment.")
             complete_report(report, run_dir)
             publish()
             export_snapshot(report, db, run_dir / "snapshot.json")
@@ -393,6 +404,7 @@ def main():
     parser.add_argument("action", choices=["run", "stop", "export", "reconcile"])
     parser.add_argument("--config", type=Path, default=ROOT / "config/showcase.json")
     parser.add_argument("--no-build", action="store_true", help="Use images already built from this checkout")
+    parser.add_argument("--include-outcomes", action="store_true", help="Include an invalid record and a payment arriving after proven finalization")
     parser.add_argument("--database-outage", action="store_true", help="Stop the showcase database during generation, recover it and replay decisions")
     parser.add_argument("--outage-hold-seconds", type=int, default=20, help="Keep the observed backlog visible before recovery (0-60 seconds)")
     args = parser.parse_args()
@@ -420,9 +432,17 @@ def main():
         with ledger(run_dir / "ledger.sqlite") as db:
             if db.execute("SELECT count(*) FROM inputs").fetchone()[0] != report["acknowledged_deliveries"] + report["control_records"]:
                 raise RuntimeError("The ledger does not cover every acknowledged input. Rebuild it from inputs.jsonl before proceeding.")
+            # Older ledgers did not retain input kinds or event IDs. Recover metadata from the acknowledged log.
+            with (run_dir / "inputs.jsonl").open() as source:
+                for line in source:
+                    row = json.loads(line)
+                    if row["kind"] in ("payment", "marker", "invalid", "late"):
+                        db.execute("UPDATE inputs SET kind=?,event_id=? WHERE partition=? AND offset=? AND hash=?",
+                                   (row["kind"], row.get("payment", {}).get("event_id", ""), row["source_partition"], row["source_offset"], row["payload_sha256"]))
             progress(report)
             report["archived_records"], report["stored_decisions"] = reconcile(db, report, require_complete=False)
-            complete = not report["reconciliation"]["missing_archive"] and report["stored_decisions"] == report["expected_payments"]
+            check = report["reconciliation"]
+            complete = not check["missing_archive"] and not check["unresolved_inputs"] and check["evaluated"] + check["late_payments"] + check["invalid_payments"] == report["expected_payments"]
             report["status"] = "COMPLETE" if complete else "INCOMPLETE"
             report["updated_at"] = now()
             report["storage_unavailable"] = False

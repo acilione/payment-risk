@@ -71,6 +71,10 @@ export function OverviewSummary({
           </label>
         </div>
       </div>
+      <p className="monitoring-note">
+        Risk assessments of reported authorization attempts. This system does
+        not approve, block, or move money.
+      </p>
       <section className="stats-grid" aria-label="Risk summary">
         <Stat
           title="Transactions evaluated"
@@ -87,16 +91,16 @@ export function OverviewSummary({
           chart="neutral"
         />
         <Stat
-          title="Approval rate"
+          title="Low-risk share"
           value={totals ? `${approval}%` : "—"}
-          detail={`${formatNumber(totals?.approved || 0)} payments approved`}
+          detail={`${formatNumber(totals?.approved || 0)} low-risk assessments`}
           icon={<ShieldCheck size={18} />}
           chart="green"
         />
         <Stat
-          title="Review or rejected"
+          title="Flagged assessments"
           value={totals ? formatNumber(flagged) : "—"}
-          detail={`${formatNumber(totals?.review || 0)} review · ${formatNumber(totals?.rejected || 0)} rejected`}
+          detail={`${formatNumber(totals?.review || 0)} needs review · ${formatNumber(totals?.rejected || 0)} high risk`}
           icon={<Filter size={18} />}
           chart="amber"
         />

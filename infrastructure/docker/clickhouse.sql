@@ -97,3 +97,12 @@ CREATE TABLE IF NOT EXISTS risk.payment_ingress (
   payload_base64 String CODEC(ZSTD), payload_bytes UInt64, payload_sha256 String,
   headers_json String CODEC(ZSTD), archived_at DateTime64(3) DEFAULT now64(3)
 ) ENGINE = MergeTree ORDER BY (source_topic, source_partition, source_offset);
+
+-- Delivery coordinates preserve retries without hiding contradictory side-output evidence.
+CREATE TABLE IF NOT EXISTS risk.processing_outcomes (
+  source_topic LowCardinality(String), source_partition UInt32, source_offset UInt64,
+  outcome LowCardinality(String), input_topic String, input_partition Int64, input_offset Int64,
+  payload_sha256 String, event_id String, input_sha256 String,
+  reason String, watermark Int64, lateness_ms Int64, observed_at Int64,
+  ingested_at DateTime64(3) DEFAULT now64(3)
+) ENGINE = MergeTree ORDER BY (source_topic, source_partition, source_offset);

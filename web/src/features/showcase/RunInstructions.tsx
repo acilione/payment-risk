@@ -17,7 +17,8 @@ export function RunInstructions() {
           To demonstrate recovery, stop the current run and use{" "}
           <code>make showcase-recovery</code>. The database stops during payment
           generation, restarts automatically, and the run checks stored inputs
-          and replays decisions. Follow the progress above.
+          and replays assessments. It also checks one invalid input and one late
+          payment. Follow the progress above.
         </p>
         <p className="showcase-note">
           History is published in chronological order on one Kafka partition.

@@ -35,13 +35,74 @@ export function Reconciliation({ report }: { report: ShowcaseReport }) {
               <dd>{check.missing_archive.toLocaleString("en-GB")}</dd>
             </div>
             <div>
-              <dt>Payments without a stored decision</dt>
-              <dd>{check.without_decision.toLocaleString("en-GB")}</dd>
+              <dt>
+                {check.unresolved_inputs === undefined
+                  ? "Payments without a stored assessment"
+                  : "Inputs without a known outcome"}
+              </dt>
+              <dd>
+                {(
+                  check.unresolved_inputs ?? check.without_decision
+                ).toLocaleString("en-GB")}
+              </dd>
             </div>
           </dl>
+          {check.unresolved_inputs !== undefined && (
+            <dl className="reconciliation-counts outcome-counts">
+              <div>
+                <dt>Evaluated payments</dt>
+                <dd>{check.evaluated.toLocaleString("en-GB")}</dd>
+              </div>
+              <div>
+                <dt>Invalid input records</dt>
+                <dd>{(check.invalid_inputs ?? 0).toLocaleString("en-GB")}</dd>
+              </div>
+              <div>
+                <dt>Late payments</dt>
+                <dd>{(check.late_payments ?? 0).toLocaleString("en-GB")}</dd>
+              </div>
+            </dl>
+          )}
+          {!!(
+            (check.invalid_input_examples?.length ?? 0) +
+            (check.late_payment_examples?.length ?? 0)
+          ) && (
+            <details>
+              <summary>Invalid and late input evidence</summary>
+              <ul>
+                {check.invalid_input_examples?.map((row) => (
+                  <li key={`invalid:${row.partition}:${row.offset}`}>
+                    Invalid input at partition {row.partition}, offset{" "}
+                    {row.offset}: <code>{row.reason}</code>.
+                  </li>
+                ))}
+                {check.late_payment_examples?.map((row) => (
+                  <li key={row.event_id}>
+                    Late payment <code>{row.event_id}</code>:{" "}
+                    {row.lateness_ms.toLocaleString("en-GB")} ms behind the
+                    cutoff (<code>{row.reason}</code>).
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {!!check.unresolved_input_examples?.length && (
+            <details>
+              <summary>Inputs requiring follow-up</summary>
+              <ul>
+                {check.unresolved_input_examples.map((row) => (
+                  <li key={`${row.partition}:${row.offset}`}>
+                    <code>
+                      Partition {row.partition}, offset {row.offset}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           <p>
             {check.verified
-              ? "Input coordinates and payload hashes were compared with the generator ledger. Decision identities and input hashes were checked separately."
+              ? "Input coordinates and payload hashes were compared with the generator ledger. Assessment identities and input hashes were checked separately. Invalid and late counts, when present, require matching stored side-output evidence."
               : "Counts are provisional. Completion requires comparing every acknowledged input and every generated payment with the ledger."}
           </p>
           {!!check.missing_payment_examples?.length && (
@@ -101,9 +162,10 @@ export function Reconciliation({ report }: { report: ShowcaseReport }) {
         </div>
       )}
       <p className="showcase-note">
-        This check covers this generator run. A missing decision needs
-        investigation; it is not automatically classified as pending, invalid or
-        late.
+        This check covers this generator run. Invalid inputs failed validation;
+        late payments arrived after the event-time cutoff. Neither is a fraud
+        classification. Unresolved inputs need investigation. Control records
+        require archiving only.
       </p>
     </section>
   );

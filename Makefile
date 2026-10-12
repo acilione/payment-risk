@@ -69,7 +69,7 @@ SHOWCASE_CONFIG ?= config/showcase.json
 showcase:
 	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG)
 showcase-recovery:
-	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG) --database-outage
+	python3 scripts/showcase.py run --config $(SHOWCASE_CONFIG) --database-outage --include-outcomes
 showcase-reconcile:
 	python3 scripts/showcase.py reconcile
 showcase-stop:

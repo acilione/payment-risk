@@ -29,7 +29,7 @@ export const formatUtcDate = (timestamp: number) =>
 export const shortenId = (id: string) =>
   id.length > 24 ? `${id.slice(0, 12)}…${id.slice(-7)}` : id;
 export const decisionLabels: Record<DecisionKind, string> = {
-  APPROVE: "Approved",
-  REVIEW: "Review",
-  REJECT: "Rejected",
+  APPROVE: "Low risk",
+  REVIEW: "Needs review",
+  REJECT: "High risk",
 };

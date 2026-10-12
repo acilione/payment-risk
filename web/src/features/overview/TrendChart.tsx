@@ -19,7 +19,7 @@ export function TrendChart({ series }: { series: Overview["series"] }) {
       <svg
         viewBox="0 0 750 240"
         role="img"
-        aria-label="Decisions over time"
+        aria-label="Risk assessments over time"
         onMouseLeave={() => setHover(null)}
       >
         <defs>
@@ -110,8 +110,9 @@ export function TrendChart({ series }: { series: Overview["series"] }) {
         <div className="chart-tooltip">
           <strong>{formatTime(series[hover].time)}</strong>
           <span>
-            {formatNumber(series[hover].approved)} approved ·{" "}
-            {series[hover].review} review · {series[hover].rejected} rejected
+            {formatNumber(series[hover].approved)} low risk ·{" "}
+            {series[hover].review} needs review · {series[hover].rejected} high
+            risk
           </span>
         </div>
       )}

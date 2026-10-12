@@ -1,3 +1,4 @@
+import { decisionLabels } from "../../lib/format";
 import type {
   InvestigationDecision,
   RuleEvidence,
@@ -38,12 +39,12 @@ export function DecisionEvidence({
         </div>
         <div className={`evidence-score ${decision.decision.toLowerCase()}`}>
           <strong>{decision.risk_score}</strong>
-          <span>{decision.decision}</span>
+          <span>{decisionLabels[decision.decision]}</span>
         </div>
       </div>
       <p className="threshold-note">
         {thresholds.review_threshold !== undefined
-          ? `Review from ${thresholds.review_threshold}; reject from ${thresholds.reject_threshold}. Combined score capped at 100.`
+          ? `Needs review from ${thresholds.review_threshold}; high risk from ${thresholds.reject_threshold}. Combined score capped at 100.`
           : "Historical classification thresholds unavailable."}
       </p>
       <div className="evidence-rules">

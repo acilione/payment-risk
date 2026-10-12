@@ -1,3 +1,4 @@
+import { decisionLabels } from "../../lib/format";
 import { Search } from "lucide-react";
 import type { CustomerPage } from "../../investigation-types";
 import type { DecisionFilter } from "../../types";
@@ -52,9 +53,9 @@ export function CustomerSearch({
             }}
           >
             <option value="ALL">Any decision</option>
-            <option value="REVIEW">Review</option>
-            <option value="REJECT">Reject</option>
-            <option value="APPROVE">Approve</option>
+            <option value="REVIEW">{decisionLabels.REVIEW}</option>
+            <option value="REJECT">{decisionLabels.REJECT}</option>
+            <option value="APPROVE">{decisionLabels.APPROVE}</option>
           </select>
         </label>
       </div>

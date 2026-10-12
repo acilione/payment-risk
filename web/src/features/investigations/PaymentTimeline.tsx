@@ -1,3 +1,4 @@
+import { decisionLabels } from "../../lib/format";
 import { Clock3 } from "lucide-react";
 import type {
   InvestigationDecision,
@@ -41,7 +42,7 @@ export function PaymentTimeline({
               <div>
                 <strong>{formatMoney(decision.amount_minor)}</strong>
                 <span className={`badge ${decision.decision.toLowerCase()}`}>
-                  {decision.decision}
+                  {decisionLabels[decision.decision]}
                 </span>
               </div>
               <span>Score {decision.risk_score} / 100</span>

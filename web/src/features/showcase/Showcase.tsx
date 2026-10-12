@@ -1,3 +1,4 @@
+import { decisionLabels } from "../../lib/format";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -66,9 +67,9 @@ export function Showcase({
       icon: Database,
     },
     {
-      name: "Stored decisions",
+      name: "Stored assessments",
       value: report?.stored_decisions,
-      text: "One logical result per payment",
+      text: "Evaluated payments; excludes invalid and late inputs",
       icon: Check,
     },
   ];
@@ -145,13 +146,13 @@ export function Showcase({
                 <span>Flink decisions</span>
               </div>
               <div className="showcase-bars">
-                {["APPROVE", "REVIEW", "REJECT"].map((decision) => {
+                {(["APPROVE", "REVIEW", "REJECT"] as const).map((decision) => {
                   const count = report.decision_counts?.[decision] || 0;
                   return (
-                    <div key={decision}>
+                    <div key={decisionLabels[decision]}>
                       <div>
                         <span className={`badge ${decision.toLowerCase()}`}>
-                          {decision}
+                          {decisionLabels[decision]}
                         </span>
                         <strong>{count}</strong>
                       </div>

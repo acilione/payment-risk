@@ -29,7 +29,9 @@ public final class DecisionMaterializer {
         var consumer = new KafkaConsumer<String, byte[]>(p)) {
       var writer = KafkaIngestion.writer(c, metrics);
       KafkaIngestion.subscribe(
-          consumer, c.topic("risk.decisions"), c.environment().equals("local"));
+          consumer,
+          List.of(c.topic("risk.decisions"), c.topic("payments.dlq"), c.topic("payments.late")),
+          c.environment().equals("local"));
       long lastProbe = 0;
       while (!Thread.currentThread().isInterrupted()) {
         var records = consumer.poll(Duration.ofSeconds(1));
@@ -49,12 +51,26 @@ public final class DecisionMaterializer {
           // Registry/network outages propagate; they are not malformed payment records.
           String table, row;
           try {
-            var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
-            table = "risk.evaluations";
-            row = Json.write(MaterializerRows.convert(decision, record));
+            if (record.topic().equals(c.topic("risk.decisions"))) {
+              var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
+              table = "risk.evaluations";
+              row = Json.write(MaterializerRows.convert(decision, record));
+            } else {
+              boolean invalid = record.topic().equals(c.topic("payments.dlq"));
+              var outcome =
+                  Json.read(codec.decode(record.value(), invalid ? "dead-letter" : "late-event"));
+              table = "risk.processing_outcomes";
+              row = Json.write(ProcessingOutcomeRows.convert(outcome, record, invalid));
+            }
           } catch (IllegalArgumentException | org.apache.avro.AvroRuntimeException e) {
             table = "risk.materializer_rejections";
-            row = Json.write(MaterializerRows.rejection(record, "INVALID_DECISION"));
+            row =
+                Json.write(
+                    MaterializerRows.rejection(
+                        record,
+                        record.topic().equals(c.topic("risk.decisions"))
+                            ? "INVALID_DECISION"
+                            : "INVALID_OUTCOME"));
           }
           batch.add(table, row, record);
         }

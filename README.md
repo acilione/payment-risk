@@ -1,8 +1,8 @@
 # Payment risk
 
-A Java application that evaluates payment events with Apache Flink. Kafka carries the payments and rule updates; Flink checks each customer's recent activity and writes an `APPROVE`, `REVIEW`, or `REJECT` decision. Separate consumers archive payment inputs and store decisions in ClickHouse. A React dashboard displays the results.
+A Java application that evaluates payment events with Apache Flink. Kafka carries the payments and rule updates; Flink checks each customer's recent activity and records a risk assessment: Low risk, Needs review, or High risk. Separate consumers archive payment inputs and store decisions in ClickHouse. A React dashboard displays the results.
 
-The included producer generates synthetic EUR payments. The application calculates risk scores; it does not authorize payments or move money. [View the dashboard demo](https://acilione.github.io/payment-risk/).
+The included producer generates synthetic EUR payments. The application continuously monitors reported authorization attempts; it does not authorize payments, block purchases, or move money. An input status such as `APPROVED` comes from the upstream authorization system, not from this risk engine. The event/API codes `APPROVE`, `REVIEW`, and `REJECT` remain unchanged for compatibility; the dashboard displays them as Low risk, Needs review, and High risk. [View the dashboard demo](https://acilione.github.io/payment-risk/).
 
 ## Contents
 
@@ -109,13 +109,17 @@ make showcase-recovery
 # Open Showcase while the command runs
 ```
 
-This starts a fresh run, stops ClickHouse, and continues publishing payments through Kafka and Flink. The dashboard shows the outage and acknowledged backlog for 20 seconds before restarting the database. The command checks that archive and decision consumer offsets did not advance while storage was unavailable, waits for both consumers to catch up, compares every input coordinate and payload hash with the generator ledger, then replays committed decisions and checks uniqueness again. It does not reset consumer groups or resend historical payments into live Flink state. The database is restarted if the command fails or is interrupted.
+This starts a fresh run, stops ClickHouse, and continues publishing payments through Kafka and Flink. The dashboard shows the outage and acknowledged backlog for 20 seconds before restarting the database. The command checks that the archive and all three materialized output-topic offsets did not advance while storage was unavailable, waits for both consumers to catch up, compares every input coordinate and payload hash with the generator ledger, then replays committed decisions and checks uniqueness again. It does not reset consumer groups or resend historical payments into live Flink state. The database is restarted if the command fails or is interrupted.
 
 The [recorded recovery run](docs/evidence/showcase-recovery-2026-10-11.json) used committed source `47ab07a`: 381 payment deliveries were acknowledged during the outage, all 384 input records were archived after restart, and replaying 337 decisions left 337 logical results. The saved dashboard snapshot comes from this run. See the [dashboard during the outage](docs/images/database-outage.png).
 
-**Processing completeness** shows input records not yet archived and generated payments without a stored decision. During an outage, storage counts are unavailable; during recovery, counts remain provisional until the ID and hash comparison completes. This reconciliation covers the acknowledged records in the current generator run. Missing decisions are not automatically labeled pending, invalid or late. The archive remains available for investigating those outcomes separately.
+**Processing completeness** separates evaluated payments, invalid input records, late payments, and inputs without a known outcome. Invalid records are matched to their original Kafka topic, partition, offset, and wire hash; late payments are matched by event ID and business-input hash. A missing assessment alone does not prove that an input was invalid or late. During an outage, storage counts are unavailable. During generation, aggregate counts remain provisional until the ledger comparison completes.
 
-For a run whose producer finished but whose storage check timed out, restore the services and run `make showcase-reconcile`. It rechecks the retained ledger without producing payments and lists up to ten missing coordinates and payment IDs in `artifacts/showcase/latest.json`. It refuses to report completion if generation or the acknowledgement ledger is incomplete. `make showcase-recovery` is a local demonstration of database availability and retry handling; it does not test replicated storage or recovery from disk loss.
+The check covers the acknowledged inputs in this generator run. Every transport retry must be archived; identical retries link to the same logical assessment or late outcome. Invalid records are counted by input coordinate because malformed bytes may have no usable payment ID. Control records require archiving only and are reported separately. Conflicting outcome evidence fails reconciliation. This is run-scoped reconciliation, not a completeness claim for every external producer.
+
+For a run whose producer finished but whose storage check timed out, restore the services and run `make showcase-reconcile`. It rechecks the retained ledger without producing payments and lists up to ten missing coordinates and payment IDs in `artifacts/showcase/latest.json`. It refuses to report completion if generation or the acknowledgement ledger is incomplete. `make showcase-recovery` also generates one malformed input and one payment arriving after a committed assessment proves that its customer's event-time cutoff has advanced. Both must appear as persisted outcomes before the run completes. The malformed input has no payment ID; the late payment receives no risk assessment. This is a local demonstration of database availability and retry handling; it does not test replicated storage or recovery from disk loss.
+
+To demonstrate invalid and late outcomes without stopping the database, run `python3 scripts/showcase.py run --include-outcomes` after stopping any previous showcase run.
 
 To change the simulation:
 
@@ -178,7 +182,7 @@ VITE_DEMO_MODE=true npm --prefix web run build
 npm --prefix web run preview
 ```
 
-The export includes at most 1,000 payments, preserving complete customer histories. The full run stays in ClickHouse and the local ledger. The committed [snapshot](web/src/showcase-data.json) contains actual stored decisions, source coordinates, policy evidence, generator configuration and verification counts. Overview, Transactions and Investigations use this same snapshot in static mode; they do not recalculate scores in the browser. The static site clearly identifies the saved run and does not claim live service health.
+The export includes at most 1,000 evaluated payments, preserving each selected customer's complete assessed history. Invalid and late outcomes appear in the reconciliation report, not as fabricated assessments in payment timelines. The full run stays in ClickHouse and the local ledger. The committed [snapshot](web/src/showcase-data.json) contains actual stored decisions, source coordinates, policy evidence, generator configuration and verification counts. Overview, Transactions and Investigations use this same snapshot in static mode; they do not recalculate scores in the browser. The static site clearly identifies the saved run and does not claim live service health.
 
 ## Technologies
 
@@ -221,6 +225,8 @@ flowchart LR
   E --> L[(Kafka payments.late)]
   E --> O[(Kafka risk.decisions)]
   O --> M[ClickHouse consumer]
+  Q --> M
+  L --> M
   M --> C
   C --> A[Fastify API]
   A --> W[React dashboard]
@@ -235,7 +241,7 @@ The implementation separates state management, calculation and storage:
 |---|---|
 | `CustomerRiskProcessor` / `StateHistory` | Manage customer state, timers, policy snapshots and iteration over stored history. |
 | `RiskFeatures` / `RiskEngine` | Calculate observations, scores and explanations without storage calls. |
-| `PaymentArchiver` / `DecisionMaterializer` | Persist original inputs and evaluated decisions through independent consumers. |
+| `PaymentArchiver` / `DecisionMaterializer` | Persist original inputs independently of assessments and invalid/late outcomes. |
 | `KafkaIngestion` / `DurableKafkaBatch` / `ClickHouseWriter` | Configure consumers, bound batches, coordinate offset commits and retry database writes. |
 
 ## Feature implementation
@@ -282,7 +288,7 @@ For an event at time `t`, each rule uses the interval `(t - window, t]`. The low
 
 Matching rule weights are added and capped at 100. The default result is `APPROVE` below 30, `REVIEW` from 30 to 69, and `REJECT` from 70 upward. For example, a new-device payment of EUR 900 scores 30 and receives `REVIEW` if no other rule matches. If all five rules match, their 150 points are capped at 100 and the result is `REJECT`.
 
-Every decision includes the score, matched rule IDs sorted by ID, corresponding rule types in `reason_codes`, payment identifiers, timestamps, and a rule-settings fingerprint. The input payment status (`APPROVED` or `DECLINED`) is distinct from the risk engine's output decision.
+Every decision includes the score, matched rule IDs sorted by ID, corresponding rule types in `reason_codes`, payment identifiers, timestamps, and a rule-settings fingerprint. The input payment status (`APPROVED` or `DECLINED`) is distinct from the risk engine's output classification. The UI maps `APPROVE` to Low risk, `REVIEW` to Needs review, and `REJECT` to High risk. These classifications describe risk; they do not change the upstream authorization result. Event-time waiting and checkpoint commits also mean this pipeline is not a bounded-latency checkout authorization API.
 
 ### Rule updates without restarting the job
 
@@ -324,7 +330,7 @@ This coordinates Kafka source positions, Flink state, and Kafka output across re
 
 ### ClickHouse storage, uniqueness and retries
 
-[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 250 committed decisions per poll with auto-commit disabled. Valid records go to `risk.evaluations`; malformed decisions go to `risk.materializer_rejections` with source coordinates, error category, payload hash and length. Registry connection and authentication errors stop processing rather than marking decisions invalid.
+[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 250 committed output records per poll from the decision, DLQ, and late topics with auto-commit disabled. Assessments go to `risk.evaluations`; invalid and late evidence goes to `risk.processing_outcomes`. Malformed output records go to `risk.materializer_rejections` with source coordinates, error category, payload hash and length. Registry connection and authentication errors stop processing rather than marking decisions invalid.
 
 [DurableKafkaBatch.java](src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java) buffers up to 1 MiB of UTF-8 JSON across tables. A larger row is written alone without truncation. Each chunk commits only its own Kafka offsets, after every synchronous insert succeeds. [ClickHouseWriter.java](src/main/java/com/portfolio/paymentrisk/tools/ClickHouseWriter.java) retries network failures, HTTP 429 and server errors up to five times with backoff and jitter. Other HTTP errors fail immediately. A failed chunk remains uncommitted and is retried after the consumer restarts.
 
@@ -334,7 +340,7 @@ A lost insert response or failed offset commit can produce physical copies. The 
 
 The analytical views separate summary fields from full policy and rule evidence. `risk.evaluation_conflicts` compares the complete business content; transaction integrity checks use those conflicting IDs without joining complete decision rows. `risk.decisions_summary` resolves retries before calculating counts, and `risk.decisions_current` loads detailed evidence for a selected customer. Both exclude conflicting transactions, including when a reused evaluation ID names a different customer or transaction. They are ordinary query views, not stored totals; no background refresh or duplicate-sensitive incremental sum is introduced. `content_variants` in transaction integrity is a compatibility indicator: 1 means no conflicting evaluation content, 2 means a conflict exists.
 
-The API returns 503 when stored conflicts or quarantined decisions exist. Direct SQL readers must check `risk.integrity_conflicts` and `risk.materializer_rejections FINAL` before publishing totals. Resolving a conflict requires an explicit data correction; the application does not discard conflicting results automatically.
+The API returns 503 when stored conflicts or quarantined output records exist. Direct SQL readers must check `risk.integrity_conflicts` and `risk.materializer_rejections FINAL` before publishing totals. Resolving a conflict requires an explicit data correction; the application does not discard conflicting results automatically.
 
 ### Payment archive
 
@@ -545,6 +551,7 @@ The effective cutoff is the greater of the current watermark and the customer's 
 
 | Table or view | Purpose |
 |---|---|
+| `processing_outcomes` | Append-only invalid and late side-output deliveries. Invalid evidence retains original input coordinates and wire hash; late evidence retains event ID, business-input hash, event-time cutoff, lateness and reason. Output Kafka coordinates identify each delivery. Reconciliation groups identical evidence and rejects conflicting content. |
 | `payment_ingress` | Original committed Kafka payment records, before validation, deduplication or evaluation; includes exact bytes and source metadata. |
 | `evaluations` | Append-only deliveries, with full audit data and Kafka provenance. Physical retry rows are expected. |
 | `evaluations_logical` | One row per `evaluation_id`, delivery count and exact number of distinct business results. Processing time and source offsets do not create a new result. |
@@ -710,6 +717,24 @@ java -cp target/risk-engine.jar com.portfolio.paymentrisk.tools.MaterializerRepl
 java -cp target/risk-engine.jar com.portfolio.paymentrisk.tools.MaterializerReplay \
   --execute --reason "Rebuild analytics after storage recovery"
 ```
+
+### Replay policy
+
+The supported recovery path is to restore processing state or replay already committed outputs. Re-sending arbitrary historical payment inputs into the active job is not supported.
+
+| Situation | Supported procedure | Identity and safety checks |
+| --- | --- | --- |
+| A producer retries after an uncertain acknowledgement | Repeat the same event and transaction IDs with identical business facts. | Flink's event and transaction indexes compare fingerprints while retained. The default 24-hour processing-time TTL starts at the state write; reads do not extend it and downtime counts. This is not permanent uniqueness. |
+| Flink restarts or a worker fails | Restore compatible checkpoint/savepoint state and its source offsets. | Preserve operator identities, policy snapshots, checkpoint files, and required Kafka history. Do not start a fresh stateful job against old inputs and call that recovery. |
+| ClickHouse is temporarily unavailable | Let the existing consumers retry from uncommitted offsets. | Synchronous writes precede commits. Physical inserts may repeat; logical assessment reads must remain stable. Invalid and late evidence is persisted before its output offsets are committed too. |
+| Assessment rows need rebuilding | Use the `MaterializerReplay` command above in dry-run mode, inspect the bounded manifest, then the documented explicit execute command. | Replay committed decision records, not original payments. Preserve evaluation IDs, input hashes, and policy evidence; record the reason, source ranges, and verification results. Normal consumer offsets are not reset. |
+| Historical risk scores need recalculating | Use a separate job, consumer group, output topics, and analytical destination with an explicit engine/policy version. | Keep the original evaluations. Compare results before any controlled promotion; multiple evaluations of one transaction are ambiguous in the current primary-store contract. |
+| An input failed validation or arrived late | Investigate its archive and stored outcome; use an isolated correction/recalculation procedure. | Do not change IDs just to bypass deduplication, and do not assume a same-ID resubmission will revise a finalized assessment. Automatic correction/promotion is not implemented. |
+| Required Kafka history has expired or identity evidence conflicts | Stop and investigate the gap or conflict. | Ingestion uses `auto.offset.reset=none`; it must not silently jump to newer data and claim complete recovery. |
+
+The materializer now consumes decisions, invalid records, and late records using its existing group. Before upgrading a retained deployment, apply `make migrate-analytics`. Outside local mode, explicitly provision the group's starting offsets for the newly subscribed DLQ/late partitions after checking retained coverage. Local initialization permits offset zero only when the retained beginning is zero. If earlier side-output history is unavailable, record that coverage gap rather than claim retrospective completeness.
+
+An invalid or late outcome is not permission to discard the original transaction. Archive preservation, outcome accounting, and any corrective business action are separate responsibilities. A future action consumer must provide its own durable idempotency contract; Kafka/Flink guarantees do not automatically make an external action exactly once.
 
 Replay defaults to 100,000 records at 500 records/second and a ten-minute deadline. `--max-records` allows up to one million; `--rate` allows up to 5,000. Each attempt writes `artifacts/replay-<UUID>.json` with ranges, counts, status and a source-position digest. Preserve the manifest outside ephemeral containers. Failed runs can leave partial deliveries, which the analytical views deduplicate on replay.
 

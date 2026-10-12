@@ -12,14 +12,22 @@ test("portable snapshot retains complete, unique histories and recorded input fi
   );
   const { provenance: run, cases, policies } = snapshot;
   assert.equal(run.status, "COMPLETE");
-  assert.equal(run.stored_decisions, run.expected_payments);
+  assert.equal(
+    run.stored_decisions +
+      (run.reconciliation?.late_payments ?? 0) +
+      (run.reconciliation?.invalid_payments ?? 0),
+    run.expected_payments,
+  );
+  assert.equal(run.reconciliation?.unresolved_inputs ?? 0, 0);
   assert.equal(
     run.archived_records,
     run.acknowledged_deliveries + run.control_records,
   );
   assert.equal(
     run.acknowledged_deliveries,
-    run.expected_payments + run.transport_retries,
+    run.expected_payments +
+      run.transport_retries +
+      (run.reconciliation?.unidentified_inputs ?? 0),
   );
   const ids = new Set();
   for (const story of cases) {
