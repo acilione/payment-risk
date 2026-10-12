@@ -33,6 +33,30 @@ public final class ProjectionBootstrap {
       try (var metrics = new MaterializerMetrics(0);
           var writer = new PostgresWriter(env, metrics)) {
         var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        // ClickHouse is needed only for first migration, never to restart a ready projection.
+        boolean sourceReady = false;
+        for (int attempt = 0; attempt < 60; attempt++) {
+          var probe =
+              HttpRequest.newBuilder(URI.create(env.get("CLICKHOUSE_URL")))
+                  .timeout(Duration.ofSeconds(5))
+                  .header("X-ClickHouse-User", env.getOrDefault("CLICKHOUSE_USER", "risk"))
+                  .header("X-ClickHouse-Key", env.get("CLICKHOUSE_PASSWORD"))
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "SELECT count() FROM system.tables WHERE database='risk' AND name IN ('evaluations','processing_outcomes','materializer_rejections')"))
+                  .build();
+          try {
+            var response = http.send(probe, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200 && response.body().trim().equals("3")) {
+              sourceReady = true;
+              break;
+            }
+          } catch (IOException unavailable) {
+            /* Retry before importing any history. */
+          }
+          Thread.sleep(1000);
+        }
+        if (!sourceReady) throw new IOException("Migration source did not become ready");
         for (String table :
             List.of(
                 "risk.evaluations", "risk.processing_outcomes", "risk.materializer_rejections")) {

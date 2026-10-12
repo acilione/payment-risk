@@ -1,0 +1,671 @@
+{
+  "run_id": "show-2f1bf624cdc9",
+  "measured_at": "2026-10-12T18:06:48.168229+00:00",
+  "scope": "Bounded asynchronous live inputs across Kafka partitions, Flink and PostgreSQL; finite local load test",
+  "publishing": {
+    "load_mode": true,
+    "max_in_flight": 512,
+    "payment_partitions": 3,
+    "publishing_elapsed_ms": 150000,
+    "achieved_payments_per_second": 500.0,
+    "achieved_deliveries_per_second": 550.8666666666667,
+    "producer_elapsed_ms": 169401
+  },
+  "latency_definition": "First PostgreSQL assessment insert timestamp minus producer_time, including event-time waiting, checkpoint commits and any database outage; requires synchronized clocks",
+  "latency": {
+    "samples": 75000,
+    "p50_ms": 28597,
+    "p95_ms": 33407,
+    "p99_ms": 34578,
+    "max_ms": 35847,
+    "stages": {
+      "producer_to_evaluation": {
+        "samples": 75000,
+        "p50_ms": 10309,
+        "p95_ms": 13328,
+        "p99_ms": 18823,
+        "max_ms": 20129
+      },
+      "evaluation_to_storage_including_checkpoint": {
+        "samples": 75000,
+        "p50_ms": 17592,
+        "p95_ms": 22797,
+        "p99_ms": 24055,
+        "max_ms": 25581
+      },
+      "producer_to_acknowledgement": {
+        "samples": 75000,
+        "p50_ms": 5,
+        "p95_ms": 9,
+        "p99_ms": 23,
+        "max_ms": 2984
+      }
+    }
+  },
+  "steady_load": {
+    "status": "generator_limited",
+    "scope": "Offered payments to durable assessments; excludes warmup and post-publication drain",
+    "warmup_seconds": 30,
+    "window_seconds": 20,
+    "windows": [
+      {
+        "from_seconds": 30.0,
+        "to_seconds": 50.0,
+        "offered_backlog": 10883,
+        "stored_per_second": 500.05,
+        "scheduled_to_storage_p95_ms": 34192,
+        "generator_delay_p95_ms": 2926
+      },
+      {
+        "from_seconds": 50.0,
+        "to_seconds": 70.0,
+        "offered_backlog": 16085,
+        "stored_per_second": 239.9,
+        "scheduled_to_storage_p95_ms": 38835,
+        "generator_delay_p95_ms": 5860
+      },
+      {
+        "from_seconds": 70.0,
+        "to_seconds": 90.0,
+        "offered_backlog": 16659,
+        "stored_per_second": 471.3,
+        "scheduled_to_storage_p95_ms": 37442,
+        "generator_delay_p95_ms": 8790
+      },
+      {
+        "from_seconds": 90.0,
+        "to_seconds": 110.0,
+        "offered_backlog": 18290,
+        "stored_per_second": 418.45,
+        "scheduled_to_storage_p95_ms": 43576,
+        "generator_delay_p95_ms": 8790
+      },
+      {
+        "from_seconds": 110.0,
+        "to_seconds": 130.0,
+        "offered_backlog": 19134,
+        "stored_per_second": 457.8,
+        "scheduled_to_storage_p95_ms": 43817,
+        "generator_delay_p95_ms": 11768
+      },
+      {
+        "from_seconds": 130.0,
+        "to_seconds": 150.0,
+        "offered_backlog": 20824,
+        "stored_per_second": 415.5,
+        "scheduled_to_storage_p95_ms": 40917,
+        "generator_delay_p95_ms": 11770
+      }
+    ],
+    "criteria": {
+      "minimum_windows": 4,
+      "minimum_achieved_rate_fraction": 0.95,
+      "maximum_generator_p95_ms": 1000,
+      "maximum_backlog_growth_per_second": 10.0,
+      "maximum_latency_growth_ms": 3419.2000000000003
+    },
+    "backlog_growth_per_second": 86.40428571428572,
+    "latency_growth_ms": 6725,
+    "reason": "The driver did not maintain its offered schedule; this run cannot qualify the requested processing rate"
+  },
+  "reconciliation": {
+    "checked_at": "2026-10-12T18:00:13.453794+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 82635,
+    "evaluated": 75000,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "27488",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-2f1bf624cdc9-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2000
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "checkpoint_interval_ms": 10000,
+  "checkpoint_min_pause_ms": 2000,
+  "checkpoint_runtime": {
+    "configuration": {
+      "mode": "exactly_once",
+      "interval": 10000,
+      "timeout": 120000,
+      "min_pause": 2000,
+      "max_concurrent": 1,
+      "externalization": {
+        "enabled": true,
+        "delete_on_cancellation": false
+      },
+      "state_backend": "EmbeddedRocksDBStateBackend",
+      "checkpoint_storage": "FileSystemCheckpointStorage",
+      "unaligned_checkpoints": false,
+      "tolerable_failed_checkpoints": 0,
+      "aligned_checkpoint_timeout": 0,
+      "checkpoints_after_tasks_finish": true,
+      "state_changelog_enabled": false,
+      "changelog_periodic_materialization_interval": 600000,
+      "changelog_storage": "memory"
+    },
+    "statistics": {
+      "counts": {
+        "restored": 0,
+        "total": 85,
+        "in_progress": 0,
+        "completed": 85,
+        "failed": 0
+      },
+      "summary": {
+        "checkpointed_size": {
+          "min": 345805,
+          "max": 25883449,
+          "avg": 1952517,
+          "p50": 488473.0,
+          "p90": 4635070.200000003,
+          "p95": 9090338.400000012,
+          "p99": 25883449.0,
+          "p999": 25883449.0
+        },
+        "state_size": {
+          "min": 345805,
+          "max": 35641387,
+          "avg": 25809155,
+          "p50": 27594406.0,
+          "p90": 27601645.0,
+          "p95": 28419308.200000003,
+          "p99": 35641387.0,
+          "p999": 35641387.0
+        },
+        "end_to_end_duration": {
+          "min": 69,
+          "max": 4087,
+          "avg": 326,
+          "p50": 117.0,
+          "p90": 1048.4000000000003,
+          "p95": 1241.7,
+          "p99": 4087.0,
+          "p999": 4087.0
+        },
+        "alignment_buffered": {
+          "min": 0,
+          "max": 0,
+          "avg": 0,
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0
+        },
+        "processed_data": {
+          "min": 0,
+          "max": 199475,
+          "avg": 7972,
+          "p50": 0.0,
+          "p90": 34295.200000000004,
+          "p95": 39240.0,
+          "p99": 199475.0,
+          "p999": 199475.0
+        },
+        "persisted_data": {
+          "min": 0,
+          "max": 0,
+          "avg": 0,
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0
+        }
+      },
+      "latest": {
+        "completed": {
+          "className": "completed",
+          "id": 85,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828405119,
+          "latest_ack_timestamp": 1791828405217,
+          "checkpointed_size": 490956,
+          "state_size": 27604679,
+          "end_to_end_duration": 98,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-85",
+          "discarded": false
+        },
+        "savepoint": null,
+        "failed": null,
+        "restored": null
+      },
+      "history": [
+        {
+          "className": "completed",
+          "id": 85,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828405119,
+          "latest_ack_timestamp": 1791828405217,
+          "checkpointed_size": 490956,
+          "state_size": 27604679,
+          "end_to_end_duration": 98,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-85",
+          "discarded": false
+        },
+        {
+          "className": "completed",
+          "id": 84,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828395119,
+          "latest_ack_timestamp": 1791828395217,
+          "checkpointed_size": 494550,
+          "state_size": 27604679,
+          "end_to_end_duration": 98,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-84",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 83,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828382183,
+          "latest_ack_timestamp": 1791828382300,
+          "checkpointed_size": 490346,
+          "state_size": 27600475,
+          "end_to_end_duration": 117,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-83",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 82,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828372182,
+          "latest_ack_timestamp": 1791828372291,
+          "checkpointed_size": 490346,
+          "state_size": 27600475,
+          "end_to_end_duration": 109,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-82",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 81,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828362182,
+          "latest_ack_timestamp": 1791828362282,
+          "checkpointed_size": 490346,
+          "state_size": 27600475,
+          "end_to_end_duration": 100,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-81",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 80,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828349246,
+          "latest_ack_timestamp": 1791828349317,
+          "checkpointed_size": 490346,
+          "state_size": 27600475,
+          "end_to_end_duration": 71,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-80",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 79,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828339246,
+          "latest_ack_timestamp": 1791828339375,
+          "checkpointed_size": 490346,
+          "state_size": 27600475,
+          "end_to_end_duration": 129,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-79",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 78,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828329246,
+          "latest_ack_timestamp": 1791828329351,
+          "checkpointed_size": 493938,
+          "state_size": 27600475,
+          "end_to_end_duration": 105,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-78",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 77,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828316320,
+          "latest_ack_timestamp": 1791828316439,
+          "checkpointed_size": 489736,
+          "state_size": 27596273,
+          "end_to_end_duration": 119,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-77",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 76,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791828306320,
+          "latest_ack_timestamp": 1791828306410,
+          "checkpointed_size": 489736,
+          "state_size": 27596273,
+          "end_to_end_duration": 90,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 12,
+          "num_acknowledged_subtasks": 12,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/1ca55daa102e1c540ef7375abd36eb0b/chk-76",
+          "discarded": true
+        }
+      ]
+    }
+  },
+  "driver": {
+    "placement": "Separate Compose container, shared host",
+    "cpus": 1,
+    "memory_mib": 512
+  },
+  "experiment": {
+    "source_sha256": {
+      "docker-compose.yml": "f675314a8578f6e9a59f226dd776f8189e9adcd9556c292a07a627cc6a2018f4",
+      "config/performance-load.json": "a7fed28907922e0278166cb46ba7a6df3ef09776341914d48945ae2c90727c1a",
+      "scripts/showcase.py": "60d57f38c0122ec8132d7d7267bd4730e1633d96a60ba94c34db0a2aff95fe3c",
+      "scripts/benchmark-pipeline.py": "3baf7de898459c3bb83e6e83bb2276646d4ed88ad26ee3d6e81a19cc1c5aec4c",
+      "scripts/load_analysis.py": "2273261094c9475f9e35b35b86734fc7da9b15c61dcf53738dae47650b4c870c",
+      "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "43ba6a373bcde2b164e4d66bf9d2d1fd0d44f26be6db2f1bf45d89d9c80a8791",
+      "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+      "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "f80fb33d956fc9823b3223b902f4a101e7fe150f9a1806c69bd34b013619a942",
+      "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03"
+    },
+    "config": {
+      "seed": 7,
+      "customers": 1000,
+      "min_payments": 75,
+      "max_payments": 75,
+      "history_minutes": 1440,
+      "publish_rate": 500,
+      "retry_percent": 10,
+      "ordinary_amount_min": 250,
+      "ordinary_amount_max": 15000,
+      "large_amount_min": 80000,
+      "large_amount_max": 150000,
+      "profiles": {
+        "normal": 45,
+        "new_device": 10,
+        "takeover": 10,
+        "card_testing": 5,
+        "low_burst": 5,
+        "trusted_device": 5,
+        "known_devices": 10,
+        "checkout_retry": 10
+      }
+    },
+    "arguments": {
+      "config": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791827454967326291-config.json",
+      "historical": false,
+      "no_build": true,
+      "database_outage": false,
+      "checkpoint_interval_ms": 10000,
+      "checkpoint_min_pause_ms": 2000,
+      "warmup_seconds": 30,
+      "window_seconds": 20,
+      "rate": 500,
+      "duration_seconds": 150
+    },
+    "source_commit": "36ef7d880c41f214211a0c27fd1b6f39eaf6bf06",
+    "image_id": "sha256:7ce79f38370604291acf7df36f78b6edc26a7fd5d562ff716cbe37c7f33f0891",
+    "environment": {
+      "logical_cpus": 20,
+      "memory_bytes": 16605831168
+    },
+    "log": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791827454967326291.log"
+  },
+  "config": {
+    "seed": 7,
+    "customers": 1000,
+    "min_payments": 75,
+    "max_payments": 75,
+    "history_minutes": 1440,
+    "publish_rate": 500,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "recovery": null,
+  "metrics_file": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791827454967326291-metrics.jsonl",
+  "metrics_summary": {
+    "scope": "Entire command, including startup and final drain; not a steady-state saturation test",
+    "sample_errors": 1,
+    "series": {
+      "risk_materializer_insert_errors_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 0.0,
+        "max": 2341.0,
+        "last": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0
+      },
+      "risk_materializer_insert_errors_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 247438.0,
+        "max": 53113841.0,
+        "last": 53113841.0
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 386.0,
+        "max": 82635.0,
+        "last": 82635.0
+      },
+      "risk_materializer_batches_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 102,
+        "first": 2.0,
+        "max": 16030.0,
+        "last": 16030.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 1088230.0,
+        "max": 244499965.0,
+        "last": 244499965.0
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 339.0,
+        "max": 75002.0,
+        "last": 75002.0
+      },
+      "risk_materializer_batches_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 102,
+        "first": 2.0,
+        "max": 313.0,
+        "last": 313.0
+      },
+      "backpressure_ms_per_second {}": {
+        "samples": 102,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "checkpoint_duration_ms {}": {
+        "samples": 98,
+        "first": -1.0,
+        "max": 4087.0,
+        "last": 115.0
+      },
+      "source_lag_max {}": {
+        "samples": 44,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      }
+    }
+  },
+  "source_commit": "5e6197a36a63439ab103555868a93d8661d150e5",
+  "source_sha256": {
+    "docker-compose.yml": "f675314a8578f6e9a59f226dd776f8189e9adcd9556c292a07a627cc6a2018f4",
+    "config/performance-load.json": "a7fed28907922e0278166cb46ba7a6df3ef09776341914d48945ae2c90727c1a",
+    "scripts/showcase.py": "60d57f38c0122ec8132d7d7267bd4730e1633d96a60ba94c34db0a2aff95fe3c",
+    "scripts/benchmark-pipeline.py": "3baf7de898459c3bb83e6e83bb2276646d4ed88ad26ee3d6e81a19cc1c5aec4c",
+    "scripts/load_analysis.py": "2273261094c9475f9e35b35b86734fc7da9b15c61dcf53738dae47650b4c870c",
+    "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "43ba6a373bcde2b164e4d66bf9d2d1fd0d44f26be6db2f1bf45d89d9c80a8791",
+    "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+    "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "f80fb33d956fc9823b3223b902f4a101e7fe150f9a1806c69bd34b013619a942",
+    "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03"
+  },
+  "source_dirty": true
+}

@@ -641,6 +641,8 @@ python3 scripts/benchmark-pipeline.py --rate 500 --duration-seconds 150
 
 The driver runs separately from Flink, records intended send times, and distinguishes generator delay from processing backlog. Reports in `artifacts/pipeline-load/` include acknowledgement, evaluation and first PostgreSQL storage timings, exact reconciliation and checkpoint configuration. The default analysis excludes a 30-second warmup and requires four complete 20-second observation windows. A finite completed run is not proof of maximum sustainable throughput. `--checkpoint-interval-ms 2000 --checkpoint-min-pause-ms 500` tests a shorter checkpoint schedule without disabling transactional output.
 
+The [live-load report](docs/evidence/postgres-live-load.json) reconciled 75,000 assessments and 82,635 archived inputs with no unresolved outcomes. End-to-end p95 latency was 33.4 seconds. Although average publishing reached 500 payments/second over 150 seconds, send timing drifted by up to 11.8 seconds at the measured p95; the run is classified as generator-limited and does not qualify sustainable throughput at that rate. Event-time waiting and checkpoint visibility remain part of the measured latency.
+
 Run `mvn -Dtest=StateLoadTest -Drisk.load=true test` to profile the customer operator with embedded RocksDB and compare its observations against the reference evaluator. It excludes Kafka and database transport.
 
 ### Remaining limits

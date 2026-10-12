@@ -184,7 +184,6 @@ services:
     entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.ProjectionBootstrap]
     depends_on:
       risk-db: {condition: service_healthy}
-      clickhouse: {condition: service_healthy}
   registry:
     logging: *logging
     image: apicurio/apicurio-registry:3.3.2
