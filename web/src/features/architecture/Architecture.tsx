@@ -70,7 +70,7 @@ export function Architecture({
               icon: Database,
               step: "04",
               name: "ClickHouse",
-              detail: "Input archive and dashboard queries",
+              detail: "Input archive and published analytics",
             },
           ].map(({ icon: Icon, step, name, detail }, index) => {
             return (

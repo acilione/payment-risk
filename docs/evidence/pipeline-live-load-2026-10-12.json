@@ -1,0 +1,204 @@
+{
+  "run_id": "show-61208fb96115",
+  "measured_at": "2026-10-12T12:34:26.463680+00:00",
+  "scope": "Bounded asynchronous live inputs across Kafka partitions, Flink and ClickHouse; finite local load test",
+  "publishing": {
+    "load_mode": true,
+    "max_in_flight": 512,
+    "payment_partitions": 3,
+    "publishing_elapsed_ms": 120009,
+    "achieved_payments_per_second": 499.9625028122891,
+    "achieved_deliveries_per_second": 550.9920089326633,
+    "producer_elapsed_ms": 137088
+  },
+  "latency_definition": "First ClickHouse insert timestamp minus producer_time, including event-time waiting, checkpoint commits and any database outage; requires synchronized clocks",
+  "latency": {
+    "samples": 60000,
+    "p50_ms": 18895,
+    "p95_ms": 24400,
+    "p99_ms": 25969,
+    "max_ms": 27167,
+    "stages": {
+      "producer_to_evaluation": {
+        "samples": 60000,
+        "p50_ms": 10400,
+        "p95_ms": 15277,
+        "p99_ms": 19432,
+        "max_ms": 20421
+      },
+      "evaluation_to_storage_including_checkpoint": {
+        "samples": 60000,
+        "p50_ms": 7611,
+        "p95_ms": 13159,
+        "p99_ms": 15205,
+        "max_ms": 16095
+      },
+      "producer_to_acknowledgement": {
+        "samples": 60000,
+        "p50_ms": 7,
+        "p95_ms": 24,
+        "p99_ms": 47,
+        "max_ms": 2957
+      }
+    }
+  },
+  "reconciliation": {
+    "checked_at": "2026-10-12T12:34:05.010459+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 66129,
+    "evaluated": 60000,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "22086",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-61208fb96115-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2000
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "config": {
+    "seed": 7,
+    "customers": 1000,
+    "min_payments": 60,
+    "max_payments": 60,
+    "history_minutes": 1440,
+    "publish_rate": 500,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "recovery": null,
+  "metrics_file": "artifacts/pipeline-load/1791807758243467724-metrics.jsonl",
+  "source_commit": "3a882e11dab95c62526e39bfb764bdb855ab2248",
+  "source_dirty": true,
+  "metrics_summary": {
+    "scope": "Entire command, including startup and final drain; not a steady-state saturation test",
+    "sample_errors": 7,
+    "series": {
+      "risk_materializer_insert_errors_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 0.0,
+        "max": 1592.0,
+        "last": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0
+      },
+      "risk_materializer_insert_errors_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 7071076.0,
+        "max": 42500115.0,
+        "last": 42500115.0
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 11012.0,
+        "max": 66129.0,
+        "last": 66129.0
+      },
+      "risk_materializer_batches_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 120,
+        "first": 10137.0,
+        "max": 10137.0,
+        "last": 7399.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 28509809.0,
+        "max": 172760555.0,
+        "last": 0.0
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 10002.0,
+        "max": 60002.0,
+        "last": 0.0
+      },
+      "risk_materializer_batches_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 120,
+        "first": 46.0,
+        "max": 273.0,
+        "last": 0.0
+      },
+      "checkpoint_duration_ms {}": {
+        "samples": 120,
+        "first": 200.0,
+        "max": 4379.0,
+        "last": 372.0
+      },
+      "source_lag_max {}": {
+        "samples": 40,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      },
+      "backpressure_ms_per_second {}": {
+        "samples": 111,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0
+      }
+    }
+  },
+  "metrics_sha256": "13988ce7e463c4e53380be6d51443a0eb9fc887daf6001620cc8c7b90a8ce445",
+  "qualification": "Two-minute finite load on a shared 20-CPU/16-GB WSL host, with other services and operator experiments active. No saturation sweep, long-duration SLA, disk-loss or bank-capacity qualification. Stage percentiles are separate distributions and must not be added.",
+  "postprocessing": "Metric summary computed from the saved samples after the run. The run predates removal of a redundant reconciliation scan and addition of source-file hashing to the benchmark command."
+}

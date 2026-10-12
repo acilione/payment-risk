@@ -31,12 +31,19 @@ public class CustomerRiskProcessor
   private transient RollingFeatures rolling;
   private transient PendingPayments queue;
   private transient StateExpiryIndex expiry;
+  private transient Map<String, RiskEngine.PreparedPolicy> policyCache;
 
   public CustomerRiskProcessor(AppConfig config) {
     this.config = config;
   }
 
   public void open(OpenContext c) {
+    policyCache =
+        new LinkedHashMap<>(32, 0.75f, true) {
+          protected boolean removeEldestEntry(Map.Entry<String, RiskEngine.PreparedPolicy> entry) {
+            return size() > 32;
+          }
+        };
     catalog = config.policyJson().isEmpty() ? null : PolicyCatalog.from(config);
     pendingSince =
         getRuntimeContext().getState(new ValueStateDescriptor<>("pending-since-v1", Types.LONG));
@@ -222,16 +229,22 @@ public class CustomerRiskProcessor
       Long lastSeen = devices.get(device);
       if (lastSeen == null && count(deviceCount) >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
+      long started = System.nanoTime();
       var rules = new ArrayList<JsonNode>();
       item.path("rules").forEach(rules::add);
-      long started = System.nanoTime();
+      int review = item.path("review_threshold").asInt(config.review());
+      int reject = item.path("reject_threshold").asInt(config.reject());
+      // Only derived immutable policy metadata is cached; managed payment state remains
+      // authoritative.
+      String policyKey = review + ":" + reject + ":" + item.path("rules");
+      var prepared =
+          policyCache.computeIfAbsent(
+              policyKey, ignored -> RiskEngine.prepare(rules, review, reject));
       boolean incremental = rolling.active() || count(historyCount) >= 64;
       var decision =
           RiskEngine.evaluate(
               tx,
-              rules,
-              item.path("review_threshold").asInt(config.review()),
-              item.path("reject_threshold").asInt(config.reject()),
+              prepared,
               System.currentTimeMillis(),
               incremental
                   ? rolling.observe(tx, recent, lastSeen, rules, ctx.timerService())

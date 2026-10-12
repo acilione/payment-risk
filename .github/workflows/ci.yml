@@ -32,6 +32,31 @@ jobs:
           path: |
             target/
             artifacts/state-load.json
+  analytics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: {node-version: '24.20.0'}
+      - run: python3 scripts/init-env.py && docker compose up -d --wait clickhouse
+      - name: Verify direct and published analytics
+        run: |
+          node --env-file=.env scripts/benchmark-investigation.mjs
+          cp artifacts/investigation-load.json artifacts/investigation-direct.json
+          RISK_QUERY_MODE=snapshot RISK_QUERY_STAGES=1000,10000,50000,250000 node --env-file=.env scripts/benchmark-investigation.mjs
+          cp artifacts/investigation-load.json artifacts/investigation-snapshot.json
+      - if: always()
+        run: |
+          docker compose logs --no-color clickhouse > analytics-compose.log
+          docker compose down
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: analytics-evidence
+          path: |
+            artifacts/investigation-*.json
+            analytics-compose.log
   integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -39,9 +64,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: make up run-job simulate-customers integration-test recovery-test
       - run: make stop-job restore integration-test idle-resume-test verify-observability
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: {node-version: '24.20.0'}
-      - run: node --env-file=.env scripts/benchmark-investigation.mjs
       - run: python3 scripts/verify-materializer.py
       - run: make stop-job && python3 scripts/verify-ingress.py
       - name: Configurable generator through the full pipeline

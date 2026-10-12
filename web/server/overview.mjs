@@ -1,7 +1,7 @@
 export const windows = Object.freeze({ "15m": 900, "1h": 3600, "24h": 86400 });
 
 export function createReader(
-  { clickhouse, user, password, flink, prometheus },
+  { clickhouse, user, password, flink, prometheus, snapshot },
   fetcher = fetch,
 ) {
   async function json(url, options = {}) {
@@ -28,23 +28,32 @@ export function createReader(
   }
   return async function overview(window) {
     if (!Object.hasOwn(windows, window)) throw new Error("Invalid time window");
+    const stored = snapshot ? await snapshot.overview(window) : null;
     const seconds = windows[window];
     const bucket = seconds / 30;
     const where = `processed_at >= toUnixTimestamp64Milli(now64()) - ${seconds * 1000}`;
     const [totals, series, rules, decisions, cluster, metrics, integrity] =
       await Promise.allSettled([
-        sql(
-          `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_summary WHERE ${where}`,
-        ),
-        sql(
-          `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_summary WHERE ${where} GROUP BY time ORDER BY time`,
-        ),
-        sql(
-          `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_summary WHERE ${where} GROUP BY id ORDER BY id`,
-        ),
-        sql(
-          `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_summary WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
-        ),
+        stored
+          ? Promise.resolve([stored.totals])
+          : sql(
+              `SELECT count() AS transactions, sum(amount_minor) AS amountMinor, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected, if(count()=0,0,quantileTDigest(0.95)(greatest(0,processed_at-event_time))) AS finalizationP95 FROM risk.decisions_summary WHERE ${where}`,
+            ),
+        stored
+          ? Promise.resolve(stored.series)
+          : sql(
+              `SELECT intDiv(processed_at,${bucket * 1000})*${bucket * 1000} AS time, countIf(decision='APPROVE') AS approved, countIf(decision='REVIEW') AS review, countIf(decision='REJECT') AS rejected FROM risk.decisions_summary WHERE ${where} GROUP BY time ORDER BY time`,
+            ),
+        stored
+          ? Promise.resolve(stored.rules)
+          : sql(
+              `SELECT arrayJoin(matched_rules) AS id, count() AS matches FROM risk.decisions_summary WHERE ${where} GROUP BY id ORDER BY id`,
+            ),
+        stored
+          ? Promise.resolve(stored.decisions)
+          : sql(
+              `SELECT transaction_id,event_id,customer_id,amount_minor,risk_score,decision,matched_rules,reason_codes,rules_fingerprint,event_time,processed_at,source_partition,source_offset FROM risk.decisions_summary WHERE ${where} ORDER BY processed_at DESC,transaction_id LIMIT 100`,
+            ),
         json(flink + "/jobs/overview"),
         json(
           prometheus +
@@ -53,9 +62,11 @@ export function createReader(
               "max(flink_taskmanager_job_task_operator_KafkaSourceReader_KafkaConsumer_records_lag_max)",
             ),
         ),
-        sql(
-          "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS unresolved",
-        ),
+        stored
+          ? Promise.resolve([{ unresolved: 0 }])
+          : sql(
+              "SELECT (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS unresolved",
+            ),
       ]);
     if ([totals, series, rules, decisions].some((x) => x.status === "rejected"))
       throw new Error("Analytics unavailable");
@@ -107,7 +118,8 @@ export function createReader(
         ? Number(lagValue)
         : undefined;
     return {
-      generatedAt: new Date().toISOString(),
+      generatedAt: stored?.generatedAt || new Date().toISOString(),
+      ...(stored ? { analytics: stored.analytics } : {}),
       window,
       totals: numeric(totals.value[0], [
         "transactions",

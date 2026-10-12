@@ -17,6 +17,7 @@ export interface Decision {
   source_offset?: number | string;
 }
 export interface Overview {
+  analytics?: { generation: string; asOf: string; publishedAt: string };
   generatedAt: string;
   window: WindowKey;
   totals: {

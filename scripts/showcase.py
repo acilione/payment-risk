@@ -91,12 +91,15 @@ def ledger(path):
     db.execute("CREATE INDEX IF NOT EXISTS inputs_event ON inputs(event_id)")
     if "late" not in {row[1] for row in db.execute("PRAGMA table_info(payments)")}:
         db.execute("ALTER TABLE payments ADD COLUMN late TEXT")
+    db.execute("CREATE TABLE IF NOT EXISTS acknowledgements (partition INTEGER, offset INTEGER, observed_at INTEGER, PRIMARY KEY(partition,offset))")
     return db
 
 def record(db, row):
     if row["kind"] not in ("payment", "marker", "invalid", "late"):
         return
     db.execute("INSERT INTO inputs(partition,offset,hash,kind,event_id) VALUES(?,?,?,?,?)", (row["source_partition"], row["source_offset"], row["payload_sha256"], row["kind"], row.get("payment", {}).get("event_id", "")))
+    if "acknowledged_at" in row:
+        db.execute("INSERT INTO acknowledgements VALUES(?,?,?)", (row["source_partition"], row["source_offset"], row["acknowledged_at"]))
     if row["kind"] in ("payment", "late") and not row.get("retry", False):
         payment = row["payment"]
         facts = {k: v for k, v in payment.items() if k != "producer_time"}
@@ -158,9 +161,17 @@ def reconcile(db, report, require_complete=True):
         "missing_input_examples": [{"partition": p, "offset": str(o)} for p, o in db.execute("SELECT partition,offset FROM inputs WHERE archived=0 ORDER BY partition,offset LIMIT 10")],
         "missing_payment_examples": outcomes["unresolved_payment_examples"],
     }
-    if require_complete and (outcomes["unresolved_inputs"] or decisions + outcomes["late_payments"] + outcomes["invalid_payments"] != report["expected_payments"]):
-        raise AssertionError("Missing processing outcomes")
+    if require_complete:
+        require_reconciled(report)
     return archived, decisions
+
+
+def require_reconciled(report):
+    check = report["reconciliation"]
+    if not check["verified"] or check["missing_archive"]:
+        raise AssertionError("Acknowledged input missing from verified archive")
+    if check["unresolved_inputs"] or check["evaluated"] + check["late_payments"] + check["invalid_payments"] != report["expected_payments"]:
+        raise AssertionError("Missing processing outcomes")
 
 
 def consumer_offsets():
@@ -293,7 +304,7 @@ def run(args):
         publish()
         compose("cp", str(run_dir / "config.json"), "jobmanager:/tmp/showcase-config.json")
         with ledger(run_dir / "ledger.sqlite") as db, (run_dir / "inputs.jsonl").open("w") as output, (run_dir / "producer.log").open("w") as errors:
-            process = subprocess.Popen([*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS, "/tmp/showcase-config.json", run_id, *(["--include-outcomes"] if args.include_outcomes else [])],
+            process = subprocess.Popen([*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS, "/tmp/showcase-config.json", run_id, *(["--include-outcomes"] if args.include_outcomes else []), *(["--load"] if args.load else [])],
                                        cwd=ROOT, env=compose_environment(), stdout=subprocess.PIPE, stderr=errors, text=True)
             last_progress = time.monotonic()
             try:
@@ -372,7 +383,9 @@ def run(args):
                     publish()
                     raise TimeoutError("Storage reconciliation timed out; inputs and logs are retained")
                 time.sleep(3)
-            report["archived_records"], report["stored_decisions"] = reconcile(db, report)
+            # The completed scan already compared every hash and outcome. Check its result
+            # without repeating the same full-history scan before publishing the report.
+            require_reconciled(report)
             if args.database_outage:
                 report["recovery"]["stage"] = "REPLAYING"
                 publish()
@@ -385,6 +398,7 @@ def run(args):
                 report["archived_records"], report["stored_decisions"] = reconcile(db, report)
                 report["recovery"].update(stage="COMPLETE", completed_at=now(), replay=replay_report,
                     offsets_after=consumer_offsets(), verification="Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment.")
+            compose("exec", "-T", "website", "node", "server/publication-worker.mjs", "--once")
             complete_report(report, run_dir)
             publish()
             export_snapshot(report, db, run_dir / "snapshot.json")
@@ -405,6 +419,7 @@ def main():
     parser.add_argument("--config", type=Path, default=ROOT / "config/showcase.json")
     parser.add_argument("--no-build", action="store_true", help="Use images already built from this checkout")
     parser.add_argument("--include-outcomes", action="store_true", help="Include an invalid record and a payment arriving after proven finalization")
+    parser.add_argument("--load", action="store_true", help="Bounded asynchronous publication across partitions using live event times")
     parser.add_argument("--database-outage", action="store_true", help="Stop the showcase database during generation, recover it and replay decisions")
     parser.add_argument("--outage-hold-seconds", type=int, default=20, help="Keep the observed backlog visible before recovery (0-60 seconds)")
     args = parser.parse_args()

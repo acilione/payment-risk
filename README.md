@@ -34,10 +34,10 @@ docker compose version
 docker info
 ```
 
-Clone the branch containing the generator and Showcase page. If you already have that branch checked out, use its repository directory instead.
+Clone the repository, or use your existing checkout:
 
 ```bash
-git clone --branch feat/production-plan https://github.com/acilione/payment-risk.git
+git clone https://github.com/acilione/payment-risk.git
 cd payment-risk
 ```
 
@@ -344,9 +344,9 @@ Decision decoding and batch work have a sixty-second budget; HTTP requests time 
 
 A lost insert response or failed offset commit can produce physical copies. The SQL views group deliveries by `evaluation_id`, compare business content and expose conflicts. Multiple evaluations for one transaction also require review. Kafka offsets identify deliveries; they do not select a winning business result. This provides a deduplicated analytical view, not a database uniqueness constraint.
 
-The analytical views separate summary fields from full policy and rule evidence. `risk.evaluation_conflicts` compares the complete business content; transaction integrity checks use those conflicting IDs without joining complete decision rows. `risk.decisions_summary` resolves retries before calculating counts, and `risk.decisions_current` loads detailed evidence for a selected customer. Both exclude conflicting transactions, including when a reused evaluation ID names a different customer or transaction. They are ordinary query views, not stored totals; no background refresh or duplicate-sensitive incremental sum is introduced. `content_variants` in transaction integrity is a compatibility indicator: 1 means no conflicting evaluation content, 2 means a conflict exists.
+The analytical views separate summary fields from full policy and rule evidence. `risk.evaluation_conflicts` compares the complete business content; transaction integrity checks use those conflicting IDs without joining complete decision rows. `risk.decisions_summary` resolves retries before calculating counts, and `risk.decisions_current` loads detailed evidence for a selected customer. Both exclude conflicting transactions, including when a reused evaluation ID names a different customer or transaction. These diagnostic views remain ordinary query views. The dashboard publication worker uses separate derived tables described below. `content_variants` in transaction integrity is a compatibility indicator: 1 means no conflicting evaluation content, 2 means a conflict exists.
 
-The API returns 503 when stored conflicts or quarantined output records exist. Direct SQL readers must check `risk.integrity_conflicts` and `risk.materializer_rejections FINAL` before publishing totals. Resolving a conflict requires an explicit data correction; the application does not discard conflicting results automatically.
+The snapshot publisher refuses to publish conflicts or quarantined output records. The API returns 503 after a failed publication or when its last successful publication expires. Conflicts arriving after a snapshot was built are detected on the next refresh. Direct SQL readers must check `risk.integrity_conflicts` and `risk.materializer_rejections FINAL` before publishing totals. Resolving a conflict requires an explicit data correction; the application does not discard conflicting results automatically.
 
 ### Payment archive
 
@@ -362,11 +362,17 @@ New input topics disable automatic time and size retention, and the archive has 
 
 [web/src/features/](web/src/features/) contains the React views for totals, decision trends, transaction inspection, rule descriptions, and architecture. TypeScript defines the API response types, Vite builds the frontend, and SVG/CSS render the charts. The rule screen displays packaged defaults; it is not an editor or a live view of broadcast state.
 
-[web/server/overview.mjs](web/server/overview.mjs) queries the narrow `risk.decisions_summary` view for totals, 30 time buckets, rule-match counts using `arrayJoin(matched_rules)`, and the latest 100 decisions. Time windows use `processed_at` and are limited to 15 minutes, one hour, or 24 hours. The browser filters the loaded decisions by decision type or a case-insensitive match on transaction ID, customer ID, and matched rule IDs. Search therefore covers the latest 100 loaded decisions, not the complete database.
+Compose uses `ANALYTICS_MODE=snapshot`. The [publication worker](web/server/publication-worker.mjs) builds a generation of canonical evaluations, validates exact content and transaction identities, then writes customer summaries and overview results. Only a final `READY` marker makes the generation readable. Retries are collapsed before aggregation; conflicting content, ambiguous transactions or quarantined outputs block publication. Interrupted candidates remain unreadable. Raw decisions and input archives are retained independently.
+
+The worker waits 60 seconds after each build. The API rejects publications older than 120 seconds from their build start and does not fall back after a `BLOCKED` publication. Responses expose `analytics.generation` and `analytics.asOf`; the dashboard labels totals **Data as of**. The source query includes stored rows with `ingested_at` at or before build start, using one database query snapshot. This describes stored evaluations, not proof that every Kafka input through that time has been processed. Reconciliation remains separate. Conflicts arriving during a build are checked by a subsequent publication.
+
+[analytics-publisher.mjs](web/server/analytics-publisher.mjs) performs full-history validation and rebuilding inside ClickHouse, with a 512 MiB per-query memory limit and external grouping after 16 MiB and sorting after 64 MiB. Publication switches to partitioned aggregation at 10,000 keys or 16 MiB, uses one merge and insert thread, at most two query threads, 2,048-row processing blocks and insert-buffer thresholds of 2,048 rows or 4 MiB; serving queries use at most four threads. Node receives only counts, offsets, chart buckets and the latest 100 decisions. Each generation stores another canonical copy. Derived rows have a ten-minute TTL, with physical cleanup dependent on background merges; publication metadata has a one-day TTL. This reduces request cost but adds rebuild work and temporary storage. It is not an incremental serving design for unlimited history. Capacity planning must include publication duration and disk usage. A publisher outage affects dashboard freshness without stopping ingestion.
+
+[overview.mjs](web/server/overview.mjs) reads published totals, 30 time buckets, rule counts and the latest 100 decisions. Time windows use `processed_at` and cover 15 minutes, one hour or 24 hours. Browser search and decision filters apply to those 100 loaded decisions. For SQL diagnostics, start the API with `ANALYTICS_MODE=direct`; it uses the existing logical views and checks integrity on each read. Direct mode is never an automatic fallback.
 
 The API also reads Flink REST for the running job and latest checkpoint, and Prometheus for Kafka source lag. Kafka status is inferred from source metrics; it is not a direct broker probe. A checkpoint is marked current when it completed within three minutes. Finalization p95 estimates `processed_at - event_time` using `quantileTDigest`; it excludes the later Kafka commit wait. Amounts, counts and identity checks remain exact. API and integrity queries have a 256 MiB memory limit and spill aggregation/sorting to disk after 64 MiB. Failed queries return errors rather than partial totals.
 
-[web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview–window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, caches each window for five seconds, and uses fixed SQL with read-only settings and query deadlines. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
+[web/server/app.mjs](web/server/app.mjs) serves `GET /api/overview–window=...` and the built frontend through Fastify. It validates the window, shares concurrent reads, and uses fixed SQL with read-only settings and query deadlines. Direct mode caches each window for five seconds; snapshot mode checks publication status on every request. The browser refreshes every fifteen seconds. A failed analytics request returns 503; previously loaded data remains visibly stale. Failed health probes do not replace successful decision queries.
 
 The hosted demo is a separate static build using `VITE_DEMO_MODE=true`. [web/src/demo.ts](web/src/demo.ts) derives totals and charts from the shared, exported pipeline snapshot. It makes no requests to the local pipeline. Live mode does not silently switch to sample data after a failure.
 
@@ -376,7 +382,7 @@ The React entry point is [main.tsx](web/src/main.tsx); [App.tsx](web/src/app/App
 
 The **Investigations** section provides customer-ID prefix search, a decision filter, a payment timeline and recorded rule evidence. Select a payment to see all five rules, including nonmatches, observed values, thresholds, eligibility and score contributions. The provenance panel shows event time, evaluation time, engine and policy versions, the policy snapshot and the decision's Kafka coordinates.
 
-[Investigations.tsx](web/src/features/investigations/Investigations.tsx) owns this screen. [investigation.mjs](web/server/investigation.mjs) provides two read-only endpoints: `/api/investigations/customers` and `/api/investigations/timeline`. ClickHouse parameters carry user input; queries have the same time and memory limits as the overview. Pages contain at most 20 rows. Customer pages use the customer ID as a cursor; timeline pages use `(event_time, evaluation_id)` so equal timestamps have a stable order. Customer counts use `risk.decisions_summary`; timeline evidence uses `risk.decisions_current`, grouped by customer, event time and evaluation ID so the customer filter applies before evidence aggregation. Reads check the existing integrity and quarantine views before returning data. Pagination operates on current data, not a fixed historical snapshot.
+[Investigations.tsx](web/src/features/investigations/Investigations.tsx) owns this screen. The API exposes `/api/investigations/customers` and `/api/investigations/timeline`. [serving-reader.mjs](web/server/serving-reader.mjs) reads published customer summaries and canonical evaluations using ClickHouse parameters, deadlines and memory limits. Pages contain at most 20 rows. Customer cursors use the customer ID; timeline cursors use `(event_time, evaluation_id)`. Both pin the publication generation and search scope, so a refresh cannot move records between pages. After two minutes, an expired cursor requires restarting pagination. A failed publication also blocks older cursors. [investigation.mjs](web/server/investigation.mjs) retains the direct-query implementation for diagnostics.
 
 The timeline contains evaluated payments only. It does not claim that every archived input has a decision. Missing historical evidence is displayed as unavailable, and service failures produce an error rather than sample results. There are no editable case statuses, analyst notes or customer profiles: those need an authenticated workflow and a transactional store. The local API remains unauthenticated and is intended for the synthetic deployment.
 
@@ -565,6 +571,9 @@ The effective cutoff is the greater of the current watermark and the customer's 
 | `transaction_integrity` / `integrity_conflicts` | Identify conflicting results for an evaluation and multiple evaluations for one transaction. No arbitrary offset chooses a winner. |
 | `decisions_current` | One unambiguous evaluation per transaction. Conflicting transactions are excluded. Always check integrity before publishing totals. |
 | `decisions_summary` | The same valid evaluations with only the fields needed for charts, customer counts and transaction lists. Resolves physical retries before counting. |
+| `serving_evaluations` | Canonical evaluation rows for each immutable generation, including full evidence, content-variant count and physical delivery count. Ten-minute derived-data TTL. |
+| `serving_customers` / `serving_overview` | Customer summaries and bounded chart/list payloads, computed after candidate validation. Keyed by generation; ten-minute TTL. |
+| `serving_publications` | Generation status, build start, publication time, validation counts and duration. Only `READY` generations are readable; one-day metadata TTL. Recorded offsets cover representative output deliveries, not all source inputs. |
 | `materializer_rejections` | Durable quarantine keyed by source topic, partition and offset; query with `FINAL`. |
 | `decisions` / `decisions_legacy` | Previous storage retained for migration. The new materializer does not write it. |
 
@@ -825,7 +834,7 @@ Late events have already passed deduplication. Reusing the same ID within the TT
 
 [infrastructure/docker/Dockerfile](infrastructure/docker/Dockerfile) builds the Java JAR and copies it into the Flink Java 21 image. It enables the S3 filesystem plugin and checks that the Prometheus reporter is available. [web/Dockerfile](web/Dockerfile) builds the Vite assets in one stage, then copies them and the server into a Node runtime with production dependencies.
 
-When upgrading an existing local database, run `make migrate-analytics` before starting the updated website. It creates missing tables and replaces views without deleting retained rows; running it again is safe. New volumes load the same SQL during initialization, and `make showcase` applies it before generation. View replacement is sequential, so perform this local migration before serving requests. This change does not alter Flink state or the Kafka contracts.
+When upgrading an existing local database, run `make migrate-analytics` before starting the updated website and `analytics-publisher`. The API needs a successful publication before it can return snapshot data. It creates missing tables and replaces views without deleting retained rows; running it again is safe. New volumes load the same SQL during initialization, and `make showcase` applies it before generation. View replacement is sequential, so perform this local migration before serving requests. This change does not alter Flink state or the Kafka contracts.
 
 ### Kubernetes and object storage
 
@@ -929,7 +938,7 @@ The materializer check replays decisions twice, reconciles exact source coordina
 
 Run the state experiment with `mvn -Dtest=StateLoadTest -Drisk.load=true test`. [StateLoadTest](src/test/java/com/portfolio/paymentrisk/StateLoadTest.java) exercises the real customer operator with embedded RocksDB and writes `artifacts/state-load.json`. It compares every score and rule observation with an in-memory reference and checks the first decision after checkpoint restoration. The measured operation includes admission, JSON/state access and watermark finalization. It excludes Kafka, network transport, checkpoint-driven output commits and production scheduling.
 
-With ClickHouse running and local credentials in `.env`, run `node --env-file=.env scripts/benchmark-investigation.mjs`. The script creates a uniquely named database, inserts 1,000, 10,000 and 50,000 logical decisions plus 10% duplicate deliveries, and exercises the production overview and investigation readers at concurrency 1 and 4. It checks counts and cursor pagination, records errors as well as latency, writes `artifacts/investigation-load.json`, and removes only its own database. Health probes are stubbed; SQL reads, integrity checks and JSON decoding are real.
+With ClickHouse running and local credentials in `.env`, run `RISK_QUERY_MODE=snapshot node --env-file=.env scripts/benchmark-investigation.mjs`. Set `RISK_QUERY_MODE=direct` for the original read path. Snapshot mode also records rebuild duration and verifies that a conflicting delivery blocks publication and subsequent reads. The script creates a uniquely named database, inserts 1,000, 10,000 and 50,000 logical decisions plus 10% duplicate deliveries, and exercises the production overview and investigation readers at concurrency 1 and 4. It checks counts and cursor pagination, records errors as well as latency, writes `artifacts/investigation-load.json`, and removes only its own database. Health probes are stubbed; SQL reads, integrity checks and JSON decoding are real.
 
 These are exploratory budgets defined before the experiments: 1,000 operator decisions/second for small histories, operation p99 below 20 ms for typical/active/high-cardinality profiles, and 50 ms for dense-key operations and same-timestamp finalization. The query budget is 2 seconds with no errors. These values guide the portfolio's next optimization; they are not an agreed production SLA. Three requests at concurrency 1 and twelve at concurrency 4 per stage provide a small diagnostic sample, not a reliable production p99 estimate.
 
@@ -937,10 +946,12 @@ For a larger generated run through the complete pipeline, stop the current showc
 
 ```bash
 make showcase-stop
-python3 scripts/benchmark-pipeline.py --config config/showcase-load.json
+python3 scripts/benchmark-pipeline.py
 ```
 
-This configuration generates 10,000 business payments across 200 customers, plus retries and invalid/late inputs. The report records exact reconciliation, producer-to-first-database-write p50/p95/p99 latency, and sampled ingestion metrics under `artifacts/pipeline-load/`. Samples stream to disk; latency reconciliation reads pages of 200 records and computes quantiles in SQLite. Add `--database-outage` to include recovery and replay, or `--no-build` when the current images are already built. The existing showcase preserves chronological history on one input partition; these measurements are a reproducible functional load test, not a multi-partition bank-capacity result. Outage time and watermark/checkpoint waiting are included in the reported latency.
+The default `config/performance-load.json` generates 60,000 payments across 1,000 customers at a target of 500 payments/second, plus retries and explicit invalid/late inputs. Live load uses current event timestamps, customer-based partitioning across the available Kafka partitions and at most 512 outstanding sends. It preserves seeded payment attributes but compresses behavioral timing, so use the normal showcase to demonstrate rule scenarios. The configured rate is a target; the report measures achieved logical and physical publishing rates separately from checkpoint and drain time.
+
+Reports under `artifacts/pipeline-load/` include exact input/outcome reconciliation, producer-to-first-insert p50/p95/p99, acknowledgement latency, producer-to-evaluation latency, and evaluation-to-storage latency including checkpoint commits. Prometheus samples include source and materializer lag, backpressure and checkpoint duration; missing metrics remain unavailable. Samples stream to disk, reconciliation reads pages of 200 records, and SQLite calculates quantiles. Add `--database-outage` for recovery, `--no-build` for current images, or `--historical --config config/showcase-load.json` for the earlier single-partition historical workload. Outage time and watermark/checkpoint waiting are included in latency. This finite local experiment does not establish bank-scale capacity.
 
 The [12 October outage run](docs/evidence/pipeline-load-recovery-2026-10-12.json) archived all 11,012 source records: 10,000 assessed payments, 1,007 retries, one invalid record, one late payment and three controls. Kafka consumer offsets stayed unchanged during the outage. Replaying all 10,000 assessments preserved the logical count, and reconciliation found zero unresolved inputs. Producer-to-first-insert p95 was 151.4 seconds and p99 157.7 seconds **including the planned database outage**; these are recovery-run latencies, not normal-operation latency targets. Producer execution took 95.5 seconds including checkpoint and final-assessment waits, so the configured 500 payments/second must not be presented as achieved throughput.
 
@@ -1021,7 +1032,7 @@ At 50,000 logical decisions with 5,000 additional retry deliveries, the comparis
 
 The reproduced failures were ClickHouse `TIMEOUT_EXCEEDED` responses at the four-second query deadline. All updated requests succeeded at all three dataset sizes, and pagination and payment counts remained exact. This local comparison used 20 logical CPUs and 15.47 GiB guest memory with the full stack running; it is separate from the four-vCPU CI experiment above.
 
-This reduces the measured cost without introducing precomputed business totals. Full-history integrity checks still grow with retained data. If a larger target workload requires a persisted serving table or aggregates, derive them from validated logical evaluations, define their refresh boundary, and reconcile them with the raw delivery history.
+That optimization reduced direct-query cost but retained historical integrity scans on each request. Compose now uses the validated serving generations described above. The next comparison measures both query latency and the work moved into publication.
 
 ### Scope and design choices
 
@@ -1037,4 +1048,43 @@ Recent scoring state, retained payment history and investigative workflows have 
 
 Precomputed database totals also need a replay-safe design. A naive sum over incoming delivery rows counts retries. ClickHouse incremental materialized views operate on inserted blocks, so they are not automatically a globally deduplicated projection; see the [ClickHouse materialized-view documentation](https://github.com/ClickHouse/clickhouse-docs/blob/main/docs/materialized-view/incremental-materialized-view.md). Any replacement must preserve evaluation identity and expose later conflicts, with a verified backfill and reconciliation procedure.
 
-The changes above address customer-state work and bounded ingestion. The larger deployment still has three unimplemented requirements: a durable incremental integrity registry checked against the existing SQL, versioned analytical snapshots with a verified rebuild boundary, and a replicated storage/archive deployment tested under sustained multi-partition traffic. None is implied by the operator measurements. Keep the exact SQL checks and existing retention until those replacements demonstrate complete coverage and conflict handling. A TTL cache cannot establish permanent transaction uniqueness, and adding sums to delivery rows would count retries.
+The larger deployment still needs a durable incremental integrity registry checked against the existing SQL, incremental publication that avoids rebuilding all retained history, and replicated storage and archiving tested under sustained traffic and failures. Versioned analytical snapshots are now implemented, with the rebuild cost and freshness limits described above. Keep exact conflict checks and existing raw-data retention when developing these replacements. A TTL cache cannot establish permanent transaction uniqueness, and adding sums to delivery rows would count retries.
+
+### Policy preparation and remaining state cost
+
+The customer operator caches at most 32 prepared policies per subtask. A cache entry contains sorted rules, the policy fingerprint and canonical audit snapshot. Its key includes the complete rule content and both decision thresholds. Payment history, pending events and rule selection remain managed state; the derived cache is rebuilt after restoration. Canonical encoding and stored evaluation identities are unchanged.
+
+Two alternating before/after pairs on a shared host recorded typical-profile throughput of 355/448 decisions per second before caching and 468/582 after; high-cardinality results were 576/619 before and 605/900 after. [Recorded runs](docs/evidence/state-policy-cache-2026-10-12.json) include reference-output and restore checks. Database verification was active during these runs, so they are diagnostic observations under contention, not isolated capacity estimates. Earlier measurements on this host were substantially faster.
+
+Same-timestamp finalization still took 212–389 ms with the cache, above the exploratory 50 ms budget. The callback sorts and evaluates a complete timestamp group to preserve deterministic event-ID order. Splitting it across callbacks would require checkpointed continuation state and careful watermark handling; this change leaves those semantics intact. Sparse-key RocksDB access, large timestamp groups and per-customer serialization remain capacity limits to test on a dedicated host.
+
+### Published analytics measurements
+
+On 12 October, the direct and snapshot readers were tested sequentially on the same shared local host (20 logical CPUs, 16 GB WSL memory), using 1,000 customers, 50,000 logical evaluations and 5,000 retry deliveries. At concurrency four, each operation had twelve successful samples:
+
+| Read | Direct p95 | Published p95 |
+|---|---:|---:|
+| Customer search | 833 ms | 39 ms |
+| Customer timeline | 995 ms | 51 ms |
+| Overview | 1,848 ms | 28 ms |
+
+The 50,000-row publication took 1.57 seconds. Counts and pagination remained exact; injecting contradictory content prevented publication and subsequent reads. [Raw comparison](docs/evidence/published-analytics-2026-10-12.json) includes all stages, source hashes and errors. These short, sequential samples exclude HTTP routing and real health probes. The full rebuild remains proportional to retained history; the results support moving this work off requests, not a claim of constant publication cost or production capacity.
+
+A larger test covers **250,000 evaluations plus 25,000 retries**. The initial configuration exceeded 512 MiB locally; a buffer adjustment passed locally but still failed at 50,000 rows on CI. The final settings partition and spill intermediate groups earlier and use smaller processing and insert buffers. All four stages now pass locally. The canonical insert used 63 MiB at 50,000 rows and 165 MiB at 250,000, measured in ClickHouse's query log, within the unchanged 512 MiB limit.
+
+With the final settings, the complete 250,000-row publication took **5.76 seconds**. Concurrent customer/timeline/overview p95 was **36/63/26 ms**, with exact retry counts, complete pagination and blocked conflicting content. The comparison retains the failed runs and the final result. A separate CI job runs the SQL benchmarks so memory regressions are reported independently of the longer recovery suite. These short runs are diagnostic measurements, not a production scaling curve.
+
+### Live pipeline measurement
+
+The [60,000-payment run](docs/evidence/pipeline-live-load-2026-10-12.json) sustained **499.96 logical payments/second** (550.99 physical deliveries/second) for 120 seconds across three Kafka partitions. All 66,129 input records were archived: 60,000 payments, 6,124 retries, one invalid input, one late payment and three controls. Reconciliation verified 60,000 assessments, the invalid and late outcomes, and zero unresolved inputs.
+
+| Latency | p50 | p95 | p99 |
+|---|---:|---:|---:|
+| Producer to Kafka acknowledgement | 7 ms | 24 ms | 47 ms |
+| Producer to Flink evaluation | 10.40 s | 15.28 s | 19.43 s |
+| Evaluation to database, including checkpoint commit | 7.61 s | 13.16 s | 15.21 s |
+| Producer to first database insert | 18.90 s | 24.40 s | 25.97 s |
+
+Each row describes its own distribution; percentiles cannot be added. The default out-of-order allowance is ten seconds, and Compose checkpoints every ten seconds. These waits are part of the processing contract. Reducing the out-of-order allowance can classify more legitimate delayed events as late, while shorter checkpoints increase checkpoint work. Neither was changed merely to improve a latency number. Dashboard publication adds its own refresh delay after insertion.
+
+This was a finite local run on a shared host, with other services and operator experiments active. It did not determine maximum sustainable throughput. Source lag was zero in 40 finite samples, while idle samples were unavailable. Sampled materializer lag peaked at 1,592 records and returned to zero; backpressure samples were zero and the longest observed checkpoint took 4.38 seconds. Sampling does not exclude brief spikes. Detailed verification runs after ingestion and is not included in per-payment latency. The benchmark preserves raw metrics and uses exact input hashes and outcome evidence; the updated command avoids scanning the same completed reconciliation twice.

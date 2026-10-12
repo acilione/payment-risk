@@ -9,6 +9,22 @@ import java.util.*;
 public final class RiskEngine {
   private RiskEngine() {}
 
+  public record PreparedPolicy(
+      List<JsonNode> rules, int review, int reject, String fingerprint, String snapshot) {}
+
+  public static PreparedPolicy prepare(List<JsonNode> rules, int review, int reject) {
+    var ordered =
+        rules.stream().sorted(Comparator.comparing(r -> r.path("rule_id").asText())).toList();
+    var snapshot = Json.object().put("review_threshold", review).put("reject_threshold", reject);
+    snapshot.set("rules", Json.MAPPER.valueToTree(ordered));
+    return new PreparedPolicy(
+        ordered,
+        review,
+        reject,
+        Rules.fingerprint(ordered, review, reject),
+        Audit.canonical(snapshot));
+  }
+
   public static ObjectNode evaluate(
       JsonNode tx,
       List<JsonNode> history,
@@ -51,13 +67,21 @@ public final class RiskEngine {
       int reject,
       long processedAt,
       Map<String, RiskFeatures.Observation> observations) {
+    return evaluate(tx, prepare(rules, review, reject), processedAt, observations);
+  }
+
+  public static ObjectNode evaluate(
+      JsonNode tx,
+      PreparedPolicy policy,
+      long processedAt,
+      Map<String, RiskFeatures.Observation> observations) {
+    int review = policy.review(), reject = policy.reject();
     var matched = new ArrayList<String>();
     var reasons = new ArrayList<String>();
     var evidence = Json.MAPPER.createArrayNode();
     int score = 0;
     long time = tx.path("event_time").asLong();
-    var ordered =
-        rules.stream().sorted(Comparator.comparing(r -> r.path("rule_id").asText())).toList();
+    var ordered = policy.rules();
     for (var r : ordered) {
       long threshold = r.path("threshold").asLong();
       var observation = observations.get(r.path("rule_id").asText());
@@ -85,9 +109,6 @@ public final class RiskEngine {
       }
     }
     score = Math.min(100, score);
-    String fingerprint = Rules.fingerprint(ordered, review, reject);
-    var snapshot = Json.object().put("review_threshold", review).put("reject_threshold", reject);
-    snapshot.set("rules", Json.MAPPER.valueToTree(ordered));
     var result =
         Json.object()
             .put("decision_id", "risk_" + tx.path("transaction_id").asText())
@@ -96,7 +117,7 @@ public final class RiskEngine {
                 Audit.evaluationId(
                     tx.path("event_id").asText(), Audit.ENGINE_VERSION, "dynamic", 0))
             .put("engine_version", Audit.ENGINE_VERSION)
-            .put("policy_snapshot", Audit.canonical(snapshot))
+            .put("policy_snapshot", policy.snapshot())
             .put("event_id", tx.path("event_id").asText())
             .put("transaction_id", tx.path("transaction_id").asText())
             .put("customer_id", tx.path("customer_id").asText())
@@ -104,7 +125,7 @@ public final class RiskEngine {
             .put("currency", tx.path("currency").asText())
             .put("risk_score", score)
             .put("decision", score >= reject ? "REJECT" : score >= review ? "REVIEW" : "APPROVE")
-            .put("rules_fingerprint", fingerprint)
+            .put("rules_fingerprint", policy.fingerprint())
             .put("event_time", time)
             .put("processed_at", processedAt);
     result.set("matched_rules", Json.MAPPER.valueToTree(matched));
