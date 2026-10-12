@@ -170,7 +170,7 @@ export function Investigations({
                   </p>
                 </div>
                 <small>
-                  {demo ? "Fixture" : "Read"}{" "}
+                  {demo ? "Fixture" : "Data as of"}{" "}
                   {formatUtcDate(Date.parse(timeline.generatedAt))}
                   <br />
                   Source:{" "}

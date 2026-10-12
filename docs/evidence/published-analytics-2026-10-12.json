@@ -1,0 +1,559 @@
+{
+  "scope": "Sequential short SQL experiments on a shared local host; excludes HTTP routing and live health probes",
+  "reports": {
+    "direct": {
+      "sourceCommit": "3a882e11dab95c62526e39bfb764bdb855ab2248",
+      "generatedAt": "2026-10-12T12:14:30.296Z",
+      "environment": {
+        "platform": "linux",
+        "cpus": 20,
+        "memoryBytes": 16605831168
+      },
+      "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+      "budgets": {
+        "requestP95Ms": 2000,
+        "errors": 0
+      },
+      "queryErrors": [],
+      "workload": {
+        "mode": "direct",
+        "stages": [
+          1000,
+          10000,
+          50000
+        ],
+        "concurrencies": [
+          1,
+          4
+        ],
+        "rounds": 3,
+        "customers": 1000,
+        "retryPercent": 10
+      },
+      "stages": [
+        {
+          "logicalPayments": 1000,
+          "physicalDeliveries": 1100,
+          "checks": [],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 45.91770399999996,
+              "p95Ms": 62.27236000000005,
+              "maxMs": 62.27236000000005,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 66.56127099999992,
+              "p95Ms": 291.54566,
+              "maxMs": 291.54566,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 72.61542800000007,
+              "p95Ms": 86.55772500000012,
+              "maxMs": 86.55772500000012,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 89.90100000000007,
+              "p95Ms": 110.56337200000007,
+              "maxMs": 110.56337200000007,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 32.05873299999985,
+              "p95Ms": 116.73735199999987,
+              "maxMs": 116.73735199999987,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 79.42464700000005,
+              "p95Ms": 86.58101899999997,
+              "maxMs": 86.58101899999997,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ]
+        },
+        {
+          "logicalPayments": 10000,
+          "physicalDeliveries": 11000,
+          "checks": [
+            "1000 customers across 50 pages, no duplicate or missing IDs"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 116.10917000000018,
+              "p95Ms": 130.00919999999996,
+              "maxMs": 130.00919999999996,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 130.02167499999996,
+              "p95Ms": 143.79362400000036,
+              "maxMs": 143.79362400000036,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 164.34178299999985,
+              "p95Ms": 176.73550499999965,
+              "maxMs": 176.73550499999965,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 208.07655200000045,
+              "p95Ms": 229.96132500000022,
+              "maxMs": 229.96132500000022,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 90.64134300000023,
+              "p95Ms": 92.4304749999992,
+              "maxMs": 92.4304749999992,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 251.75682099999995,
+              "p95Ms": 258.6525529999999,
+              "maxMs": 258.6525529999999,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ]
+        },
+        {
+          "logicalPayments": 50000,
+          "physicalDeliveries": 55000,
+          "checks": [
+            "50 customer payments paginated; physical retries counted once"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 526.8826709999994,
+              "p95Ms": 593.9362469999978,
+              "maxMs": 593.9362469999978,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 694.833749999998,
+              "p95Ms": 833.2405839999992,
+              "maxMs": 833.2405839999992,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 659.4966840000016,
+              "p95Ms": 669.9876569999979,
+              "maxMs": 669.9876569999979,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 934.0188130000024,
+              "p95Ms": 995.4994369999986,
+              "maxMs": 995.4994369999986,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 461.900321000001,
+              "p95Ms": 504.58147899999676,
+              "maxMs": 504.58147899999676,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 1782.2698090000013,
+              "p95Ms": 1847.9929439999978,
+              "maxMs": 1847.9929439999978,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ]
+        }
+      ],
+      "sourceDirty": true,
+      "sourceHashes": {
+        "infrastructure/docker/clickhouse.sql": "610540da11913368538efb26d3f8cbe5365f81cd3a5600714ce64ddf0ae310a8",
+        "web/server/investigation.mjs": "a14638ef0f2b05debdbcb0f905ece77540862b6a5319a050977d460952b8d830",
+        "web/server/overview.mjs": "2fc4dd1fe7f3179d2b466e62a7caeab3469eeb18ef7c183d0ae5e08778042abe",
+        "scripts/benchmark-investigation.mjs": "a1d219d2f205205b414f536f49db3b82e9e203e6432505d087d0c97a67163490",
+        "web/server/analytics-publisher.mjs": "b060f44e4cd15ef339dab2119664db929f37f40429933fd06e52b14227601a41",
+        "web/server/serving-reader.mjs": "114a0f690f27cd568d2936b08619022c180afeb066fd5e68c73002060a61c540"
+      }
+    },
+    "snapshot": {
+      "sourceCommit": "3a882e11dab95c62526e39bfb764bdb855ab2248",
+      "generatedAt": "2026-10-12T12:17:07.398Z",
+      "environment": {
+        "platform": "linux",
+        "cpus": 20,
+        "memoryBytes": 16605831168
+      },
+      "scope": "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
+      "budgets": {
+        "requestP95Ms": 2000,
+        "errors": 0
+      },
+      "queryErrors": [],
+      "workload": {
+        "mode": "snapshot",
+        "stages": [
+          1000,
+          10000,
+          50000
+        ],
+        "concurrencies": [
+          1,
+          4
+        ],
+        "rounds": 3,
+        "customers": 1000,
+        "retryPercent": 10
+      },
+      "stages": [
+        {
+          "logicalPayments": 1000,
+          "physicalDeliveries": 1100,
+          "checks": [
+            "Complete immutable generation; exact logical count and delivery coverage"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 13.439753999999994,
+              "p95Ms": 17.95647100000008,
+              "maxMs": 17.95647100000008,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 21.826832999999965,
+              "p95Ms": 25.26478199999997,
+              "maxMs": 25.26478199999997,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 21.87307899999996,
+              "p95Ms": 26.207041000000004,
+              "maxMs": 26.207041000000004,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 29.213817999999947,
+              "p95Ms": 42.55449999999996,
+              "maxMs": 42.55449999999996,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 15.104096000000027,
+              "p95Ms": 15.256535999999869,
+              "maxMs": 15.256535999999869,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 18.91883699999994,
+              "p95Ms": 24.582122000000027,
+              "maxMs": 24.582122000000027,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ],
+          "publication": {
+            "generation": "edcf4273-0de5-473e-872a-a72ec8ebd08b",
+            "startedAt": 1791807427928,
+            "assessments": 1000,
+            "deliveries": 1100,
+            "buildMs": 233.374684
+          }
+        },
+        {
+          "logicalPayments": 10000,
+          "physicalDeliveries": 11000,
+          "checks": [
+            "Complete immutable generation; exact logical count and delivery coverage",
+            "1000 customers across 50 pages, no duplicate or missing IDs"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 17.13980999999967,
+              "p95Ms": 20.262876000000233,
+              "maxMs": 20.262876000000233,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 19.94626500000004,
+              "p95Ms": 26.76863400000002,
+              "maxMs": 26.76863400000002,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 29.10974400000032,
+              "p95Ms": 29.646784000000025,
+              "maxMs": 29.646784000000025,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 39.1132590000002,
+              "p95Ms": 47.09002199999986,
+              "maxMs": 47.09002199999986,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 13.71945599999981,
+              "p95Ms": 13.788739000000078,
+              "maxMs": 13.788739000000078,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 18.807094000000234,
+              "p95Ms": 21.463658000000123,
+              "maxMs": 21.463658000000123,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ],
+          "publication": {
+            "generation": "d09bcd21-65de-4410-9e0e-8130acf30b26",
+            "startedAt": 1791807430065,
+            "assessments": 10000,
+            "deliveries": 11000,
+            "buildMs": 470.22554500000024
+          }
+        },
+        {
+          "logicalPayments": 50000,
+          "physicalDeliveries": 55000,
+          "checks": [
+            "Complete immutable generation; exact logical count and delivery coverage",
+            "50 customer payments paginated; physical retries counted once",
+            "Late content conflict blocks new publication and prevents fallback to previous ready generation"
+          ],
+          "measurements": [
+            {
+              "operation": "customers",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 25.239095999999336,
+              "p95Ms": 28.43125399999917,
+              "maxMs": 28.43125399999917,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "customers",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 32.333410999999614,
+              "p95Ms": 38.77546099999927,
+              "maxMs": 38.77546099999927,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 34.65075699999943,
+              "p95Ms": 40.260763000000225,
+              "maxMs": 40.260763000000225,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "timeline",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 48.59211200000027,
+              "p95Ms": 50.92988499999956,
+              "maxMs": 50.92988499999956,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 1,
+              "attempts": 3,
+              "samples": 3,
+              "p50Ms": 25.465916000001016,
+              "p95Ms": 25.569892999999865,
+              "maxMs": 25.569892999999865,
+              "errors": 0,
+              "withinBudget": true
+            },
+            {
+              "operation": "overview",
+              "concurrency": 4,
+              "attempts": 12,
+              "samples": 12,
+              "p50Ms": 25.234494000000268,
+              "p95Ms": 27.833355999999185,
+              "maxMs": 27.833355999999185,
+              "errors": 0,
+              "withinBudget": true
+            }
+          ],
+          "publication": {
+            "generation": "e32682d2-9356-4dcb-82ac-1df8d18e916f",
+            "startedAt": 1791807438436,
+            "assessments": 50000,
+            "deliveries": 55000,
+            "buildMs": 1571.605501
+          }
+        }
+      ],
+      "sourceDirty": true,
+      "sourceHashes": {
+        "infrastructure/docker/clickhouse.sql": "610540da11913368538efb26d3f8cbe5365f81cd3a5600714ce64ddf0ae310a8",
+        "web/server/investigation.mjs": "a14638ef0f2b05debdbcb0f905ece77540862b6a5319a050977d460952b8d830",
+        "web/server/overview.mjs": "2fc4dd1fe7f3179d2b466e62a7caeab3469eeb18ef7c183d0ae5e08778042abe",
+        "scripts/benchmark-investigation.mjs": "a1d219d2f205205b414f536f49db3b82e9e203e6432505d087d0c97a67163490",
+        "web/server/analytics-publisher.mjs": "4702c65378cfe1df7bd1b91d94bbe8f6c6035eaebdbcb15775d51ff7728132c7",
+        "web/server/serving-reader.mjs": "114a0f690f27cd568d2936b08619022c180afeb066fd5e68c73002060a61c540"
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import staticFiles from "@fastify/static";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
+import { createServingReader } from "./serving-reader.mjs";
 import { createReader } from "./overview.mjs";
 import { createInvestigationReader, decodeCursor } from "./investigation.mjs";
 
@@ -28,9 +29,18 @@ export async function buildApp({
     },
   });
   await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
+  const serving =
+    process.env.ANALYTICS_MODE === "snapshot"
+      ? createServingReader({
+          clickhouse: process.env.CLICKHOUSE_URL || "http://127.0.0.1:28123",
+          user: process.env.CLICKHOUSE_USER || "risk",
+          password: process.env.CLICKHOUSE_PASSWORD || "",
+        })
+      : null;
   const read =
     reader ||
     createReader({
+      snapshot: serving,
       clickhouse: process.env.CLICKHOUSE_URL || "http://127.0.0.1:28123",
       user: process.env.CLICKHOUSE_USER || "risk",
       password: process.env.CLICKHOUSE_PASSWORD || "",
@@ -39,6 +49,7 @@ export async function buildApp({
     });
   const investigation =
     investigationReader ||
+    serving ||
     createInvestigationReader({
       clickhouse: process.env.CLICKHOUSE_URL || "http://127.0.0.1:28123",
       user: process.env.CLICKHOUSE_USER || "risk",
@@ -126,7 +137,8 @@ export async function buildApp({
       reply.header("Cache-Control", "no-store");
       const window = request.query.window;
       const existing = cache.get(window);
-      if (existing && existing.expires > Date.now()) return existing.value;
+      if (!serving && existing && existing.expires > Date.now())
+        return existing.value;
       const pending = existing?.pending || read(window);
       cache.set(window, { ...existing, pending });
       try {

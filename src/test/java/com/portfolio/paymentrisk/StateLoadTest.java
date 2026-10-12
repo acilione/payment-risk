@@ -91,6 +91,7 @@ class StateLoadTest {
             "processor/RollingFeatures.java",
             "processor/PendingPayments.java",
             "processor/StateExpiryIndex.java",
+            "domain/Audit.java",
             "domain/RiskEngine.java",
             "domain/RiskFeatures.java")) {
       hashes.put(

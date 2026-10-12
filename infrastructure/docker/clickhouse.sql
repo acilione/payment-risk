@@ -106,3 +106,26 @@ CREATE TABLE IF NOT EXISTS risk.processing_outcomes (
   reason String, watermark Int64, lateness_ms Int64, observed_at Int64,
   ingested_at DateTime64(3) DEFAULT now64(3)
 ) ENGINE = MergeTree ORDER BY (source_topic, source_partition, source_offset);
+
+-- Derived, immutable serving generations. Raw archives are never deleted by this lifecycle.
+CREATE TABLE IF NOT EXISTS risk.serving_evaluations
+ENGINE = MergeTree ORDER BY (generation, customer_id, event_time, evaluation_id)
+TTL built_at + INTERVAL 10 MINUTE DELETE
+AS SELECT CAST('' AS String) AS generation, now() AS built_at, *,
+  toUInt64(0) AS content_variants, toUInt64(0) AS delivery_count
+FROM risk.evaluations WHERE 0;
+CREATE TABLE IF NOT EXISTS risk.serving_customers (
+  generation String, built_at DateTime, customer_id String, payments UInt64,
+  alerts UInt64, maxScore UInt8, lastEvent Int64, approved UInt64, review UInt64, rejected UInt64
+) ENGINE = MergeTree ORDER BY (generation, customer_id)
+TTL built_at + INTERVAL 10 MINUTE DELETE;
+CREATE TABLE IF NOT EXISTS risk.serving_overview (
+  generation String, built_at DateTime, window String, payload String
+) ENGINE = MergeTree ORDER BY (generation, window)
+TTL built_at + INTERVAL 10 MINUTE DELETE;
+CREATE TABLE IF NOT EXISTS risk.serving_publications (
+  generation String, started_at Int64, published_at DateTime64(3) DEFAULT now64(3),
+  status LowCardinality(String), assessments UInt64, deliveries UInt64,
+  source_offsets String, build_ms UInt64, reason String
+) ENGINE = MergeTree ORDER BY (started_at, generation)
+TTL toDateTime(published_at) + INTERVAL 1 DAY DELETE;

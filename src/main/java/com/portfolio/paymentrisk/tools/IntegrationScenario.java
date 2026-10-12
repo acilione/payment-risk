@@ -175,9 +175,18 @@ public final class IntegrationScenario {
   }
 
   static void awaitSourceCheckpoint(AppConfig config, long nextOffset) throws Exception {
+    awaitSourceCheckpoint(
+        config,
+        java.util.Map.of(
+            new org.apache.kafka.common.TopicPartition(config.topic("payments.raw"), 0),
+            nextOffset));
+  }
+
+  static void awaitSourceCheckpoint(
+      AppConfig config, java.util.Map<org.apache.kafka.common.TopicPartition, Long> required)
+      throws Exception {
     var properties = config.kafkaProperties();
     properties.put("bootstrap.servers", config.bootstrap());
-    var partition = new org.apache.kafka.common.TopicPartition(config.topic("payments.raw"), 0);
     try (var admin = org.apache.kafka.clients.admin.AdminClient.create(properties)) {
       long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
       while (System.nanoTime() < deadline) {
@@ -186,7 +195,11 @@ public final class IntegrationScenario {
                 .listConsumerGroupOffsets(config.group() + "-payments")
                 .partitionsToOffsetAndMetadata()
                 .get(10, java.util.concurrent.TimeUnit.SECONDS);
-        if (offsets.containsKey(partition) && offsets.get(partition).offset() >= nextOffset) return;
+        if (required.entrySet().stream()
+            .allMatch(
+                e ->
+                    offsets.containsKey(e.getKey())
+                        && offsets.get(e.getKey()).offset() >= e.getValue())) return;
         Thread.sleep(250);
       }
     }

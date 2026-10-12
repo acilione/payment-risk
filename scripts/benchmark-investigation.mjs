@@ -4,6 +4,8 @@ import { randomUUID, createHash } from "node:crypto";
 import { cpus, totalmem, platform } from "node:os";
 import { execFileSync } from "node:child_process";
 import { createInvestigationReader } from "../web/server/investigation.mjs";
+import { publishAnalytics } from "../web/server/analytics-publisher.mjs";
+import { createServingReader } from "../web/server/serving-reader.mjs";
 import { createReader } from "../web/server/overview.mjs";
 const config = {
   clickhouse: process.env.CLICKHOUSE_URL || "http://127.0.0.1:28123",
@@ -83,8 +85,12 @@ const fetcher = async (url, options = {}) => {
     json: async () => ({ jobs: [], status: "success", data: { result: [] } }),
   };
 };
-const reader = createInvestigationReader(config, fetcher);
-const overview = createReader(config, fetcher);
+const serving =
+  process.env.RISK_QUERY_MODE === "snapshot"
+    ? createServingReader(config, fetcher)
+    : null;
+const reader = serving || createInvestigationReader(config, fetcher);
+const overview = createReader({ ...config, snapshot: serving }, fetcher);
 const report = {
   sourceCommit: execFileSync("git", ["rev-parse", "HEAD"], {
     encoding: "utf8",
@@ -100,6 +106,7 @@ const report = {
   budgets: { requestP95Ms: 2000, errors: 0 },
   queryErrors,
   workload: {
+    mode: serving ? "snapshot" : "direct",
     stages,
     concurrencies,
     rounds,
@@ -120,6 +127,8 @@ report.sourceHashes = Object.fromEntries(
       "web/server/investigation.mjs",
       "web/server/overview.mjs",
       "scripts/benchmark-investigation.mjs",
+      "web/server/analytics-publisher.mjs",
+      "web/server/serving-reader.mjs",
     ].map(async (path) => [
       path,
       createHash("sha256")
@@ -186,6 +195,19 @@ try {
       measurements: [],
     };
     report.stages.push(stage);
+    if (serving) {
+      const started = performance.now();
+      stage.publication = await publishAnalytics(config, fetcher);
+      stage.publication.buildMs = performance.now() - started;
+      if (
+        stage.publication.assessments !== count ||
+        stage.publication.deliveries !== Number(physical)
+      )
+        throw new Error("Publication coverage differs");
+      stage.checks.push(
+        "Complete immutable generation; exact logical count and delivery coverage",
+      );
+    }
     for (const [operation, run] of [
       ["customers", () => reader.customers({ q: "customer_" })],
       ["timeline", () => reader.timeline({ customer: "customer_0000" })],
@@ -292,6 +314,30 @@ try {
     .checks.push(
       `${ids.size} customer payments paginated; physical retries counted once`,
     );
+  if (serving) {
+    // A late contradictory delivery must block publication, including existing cursors.
+    await sql(
+      `INSERT INTO ${database}.evaluations SELECT * REPLACE ('conflicting-event' AS event_id) FROM ${database}.evaluations WHERE evaluation_id='eval_load_0' LIMIT 1`,
+    );
+    let rejected = false;
+    try {
+      await publishAnalytics(config, fetcher);
+    } catch {
+      rejected = true;
+    }
+    if (!rejected) throw new Error("Conflicting generation was published");
+    try {
+      await overview("24h");
+      throw new Error("Blocked generation was served");
+    } catch (error) {
+      if (error.message === "Blocked generation was served") throw error;
+    }
+    report.stages
+      .at(-1)
+      .checks.push(
+        "Late content conflict blocks new publication and prevents fallback to previous ready generation",
+      );
+  }
   if (
     report.stages.some((stage) =>
       stage.measurements.some((measurement) => measurement.errors),

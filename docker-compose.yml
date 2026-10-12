@@ -78,6 +78,7 @@ services:
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
+      ANALYTICS_MODE: snapshot
       FLINK_REST_URL: http://jobmanager:8081
       PROMETHEUS_URL: http://prometheus:9090
     ports: ['127.0.0.1:23001:23002']
@@ -91,6 +92,22 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+  analytics-publisher:
+    logging: *logging
+    image: payment-risk-website:0.1.0
+    build: {context: ./web}
+    command: [node, server/publication-worker.mjs]
+    environment:
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    restart: unless-stopped
+    depends_on:
+      clickhouse: {condition: service_healthy}
   kafka:
     logging: *logging
     image: apache/kafka:4.3.1

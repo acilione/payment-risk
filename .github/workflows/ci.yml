@@ -41,7 +41,12 @@ jobs:
       - run: make stop-job restore integration-test idle-resume-test verify-observability
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: {node-version: '24.20.0'}
-      - run: node --env-file=.env scripts/benchmark-investigation.mjs
+      - name: Verify direct and published analytics
+        run: |
+          node --env-file=.env scripts/benchmark-investigation.mjs
+          cp artifacts/investigation-load.json artifacts/investigation-direct.json
+          RISK_QUERY_MODE=snapshot node --env-file=.env scripts/benchmark-investigation.mjs
+          cp artifacts/investigation-load.json artifacts/investigation-snapshot.json
       - run: python3 scripts/verify-materializer.py
       - run: make stop-job && python3 scripts/verify-ingress.py
       - name: Configurable generator through the full pipeline

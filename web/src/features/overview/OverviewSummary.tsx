@@ -43,7 +43,7 @@ export function OverviewSummary({
         <div className="time-controls">
           <span className="updated">
             {data
-              ? `Updated ${formatTime(Date.parse(data.generatedAt))}`
+              ? `${data.analytics ? "Data as of" : "Updated"} ${formatTime(Date.parse(data.generatedAt))}`
               : "Waiting for data"}
           </span>
           <button

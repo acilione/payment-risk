@@ -17,11 +17,13 @@ import org.apache.kafka.common.serialization.*;
 /** Sends generated inputs only; classification is performed by the running Flink job. */
 public final class ShowcaseProducer {
   public static void main(String[] args) throws Exception {
-    if (args.length < 2
-        || args.length > 3
-        || (args.length == 3 && !args[2].equals("--include-outcomes")))
-      throw new IllegalArgumentException("Usage: CONFIG_JSON RUN_ID [--include-outcomes]");
-    boolean includeOutcomes = args.length == 3;
+    if (args.length < 2)
+      throw new IllegalArgumentException("Usage: CONFIG_JSON RUN_ID [--include-outcomes] [--load]");
+    var options = new HashSet<>(Arrays.asList(args).subList(2, args.length));
+    if (!Set.of("--include-outcomes", "--load").containsAll(options))
+      throw new IllegalArgumentException("Unknown producer option");
+    boolean includeOutcomes = options.contains("--include-outcomes");
+    boolean load = options.contains("--load");
     var configJson = Json.read(Files.readString(Path.of(args[0])));
     var generatorConfig = GeneratorConfig.parse(configJson);
     if (args[1].equals("--validate")) {
@@ -58,10 +60,14 @@ public final class ShowcaseProducer {
     props.put("acks", "all");
     props.put("enable.idempotence", "true");
     props.put("compression.type", "zstd");
+    props.put("linger.ms", load ? "5" : "0");
     var codec = new AvroCodec(c.registry());
     var start =
         Json.object()
             .put("kind", "start")
+            .put("load_mode", load)
+            .put("max_in_flight", load ? 512 : 1)
+            .put("payment_partitions", load ? partitions.size() : 1)
             .put("run_id", args[1])
             .put("generator_version", GeneratedPayments.VERSION)
             .put("event_time_anchor", anchor)
@@ -73,46 +79,61 @@ public final class ShowcaseProducer {
     start.set("config", configJson);
     start.set("customers", Json.MAPPER.valueToTree(generator.customers()));
     emit(start);
-    long begun = System.nanoTime(), nextOffset = 0;
+    long begun = System.nanoTime();
+    var nextOffsets = new HashMap<TopicPartition, Long>();
     int unique = 0, deliveries = 0;
+    long publishingMs = 0, finalEventTime = anchor;
     com.fasterxml.jackson.databind.JsonNode lastPayment = null;
-    try (var producer = new KafkaProducer<String, byte[]>(props)) {
+    try (var producer = new KafkaProducer<String, byte[]>(props);
+        var publisher =
+            new BoundedPaymentPublisher(producer, load ? 512 : 1, ShowcaseProducer::emit)) {
       for (var sample : generator) {
+        if (load) {
+          long delay = unique * 1000000000L / generatorConfig.rate() - (System.nanoTime() - begun);
+          if (delay > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(delay);
+        }
         var tx = sample.value();
         lastPayment = tx;
         tx.put("producer_time", System.currentTimeMillis());
+        // Load mode measures live arrival, not accelerated historical scenario effectiveness.
+        if (load) tx.put("event_time", System.currentTimeMillis());
+        finalEventTime = Math.max(finalEventTime, tx.path("event_time").asLong());
         var bytes = codec.encode(c.topic("payments.raw"), "transaction", Json.write(tx));
         for (int copy = 0; copy < (sample.retry() ? 2 : 1); copy++) {
-          var metadata =
-              producer
-                  .send(
-                      new ProducerRecord<>(
-                          c.topic("payments.raw"), 0, tx.path("customer_id").asText(), bytes))
-                  .get();
-          nextOffset = metadata.offset() + 1;
-          deliveries++;
+          int partition =
+              load
+                  ? Math.floorMod(tx.path("customer_id").asText().hashCode(), partitions.size())
+                  : 0;
           var row =
               Json.object()
                   .put("kind", "payment")
                   .put("retry", copy > 0)
                   .put("target", sample.target())
-                  .put("source_partition", metadata.partition())
-                  .put("source_offset", metadata.offset())
                   .put("payload_sha256", Audit.sha256(bytes));
           row.set("payment", tx);
-          emit(row);
+          publisher.send(
+              new ProducerRecord<>(
+                  c.topic("payments.raw"), partition, tx.path("customer_id").asText(), bytes),
+              row);
+          deliveries++;
         }
         unique++;
-        long delay = unique * 1000000000L / generatorConfig.rate() - (System.nanoTime() - begun);
-        if (delay > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(delay);
+        if (!load) {
+          publisher.drain();
+          long delay = unique * 1000000000L / generatorConfig.rate() - (System.nanoTime() - begun);
+          if (delay > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(delay);
+        }
       }
-      IntegrationScenario.awaitSourceCheckpoint(c, nextOffset);
+      publisher.drain();
+      publishingMs = (System.nanoTime() - begun) / 1000000;
+      nextOffsets.putAll(publisher.offsets());
+      IntegrationScenario.awaitSourceCheckpoint(c, nextOffsets);
       // Every source split advances only after all generated history was checkpointed.
       for (var partition : partitions) {
         String id = "showcase-control-" + args[1] + "-" + partition.partition();
         var tx =
             IntegrationScenario.transaction(
-                id, id, anchor + c.disorderMs() + 2000, 1, "control", "APPROVED");
+                id, id, finalEventTime + c.disorderMs() + 2000, 1, "control", "APPROVED");
         var bytes = codec.encode(c.topic("payments.raw"), "transaction", Json.write(tx));
         var m =
             producer
@@ -174,6 +195,9 @@ public final class ShowcaseProducer {
             .put("acknowledged_deliveries", deliveries + (includeOutcomes ? 2 : 0))
             .put("transport_retries", deliveries - unique)
             .put("control_records", partitions.size())
+            .put("publishing_elapsed_ms", publishingMs)
+            .put("achieved_payments_per_second", unique * 1000.0 / Math.max(1, publishingMs))
+            .put("achieved_deliveries_per_second", deliveries * 1000.0 / Math.max(1, publishingMs))
             .put("producer_elapsed_ms", (System.nanoTime() - begun) / 1000000));
   }
 
