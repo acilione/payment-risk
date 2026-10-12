@@ -47,8 +47,18 @@ public final class PostgresWriter implements RowWriter, AutoCloseable {
       statement.setString(2, sourceSystem);
       // The caller already bounds bytes/rows. No whole-history collection is built here.
       statement.setString(3, "[" + String.join(",", rows.strip().split("\n")) + "]");
-      statement.execute();
-      connection.commit();
+      long executeStarted = System.nanoTime();
+      try {
+        statement.execute();
+      } finally {
+        metrics.sqlNanos.addAndGet(System.nanoTime() - executeStarted);
+      }
+      long commitStarted = System.nanoTime();
+      try {
+        connection.commit();
+      } finally {
+        metrics.databaseCommitNanos.addAndGet(System.nanoTime() - commitStarted);
+      }
       metrics.lastInsert.set(System.currentTimeMillis());
       metrics.storageHealthy = true;
     } catch (SQLException error) {

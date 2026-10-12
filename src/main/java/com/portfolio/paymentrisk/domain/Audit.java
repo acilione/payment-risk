@@ -25,19 +25,23 @@ public final class Audit {
   }
 
   public static String canonical(JsonNode value) {
+    return Json.write(ordered(value));
+  }
+
+  private static JsonNode ordered(JsonNode value) {
     if (value.isObject()) {
       var fields = new TreeMap<String, JsonNode>();
-      value
-          .fields()
-          .forEachRemaining(e -> fields.put(e.getKey(), Json.read(canonical(e.getValue()))));
-      return Json.write(fields);
+      value.fields().forEachRemaining(e -> fields.put(e.getKey(), ordered(e.getValue())));
+      var object = Json.object();
+      fields.forEach(object::set);
+      return object;
     }
     if (value.isArray()) {
-      var items = new ArrayList<JsonNode>();
-      value.forEach(v -> items.add(Json.read(canonical(v))));
-      return Json.write(items);
+      var items = Json.MAPPER.createArrayNode();
+      value.forEach(v -> items.add(ordered(v)));
+      return items;
     }
-    return Json.write(value);
+    return value;
   }
 
   // One evaluation per event, engine release and explicitly named policy release.

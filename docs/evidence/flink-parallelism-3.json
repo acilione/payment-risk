@@ -1,0 +1,1340 @@
+{
+  "run_id": "show-00300115f6d9",
+  "measured_at": "2026-10-12T20:29:36.904327+00:00",
+  "scope": "Bounded asynchronous live inputs across Kafka partitions, Flink and PostgreSQL; finite local load test",
+  "publishing": {
+    "load_mode": true,
+    "max_in_flight": 512,
+    "payment_partitions": 3,
+    "publishing_elapsed_ms": 110003,
+    "achieved_payments_per_second": 499.9863640082543,
+    "achieved_deliveries_per_second": 551.1122423933892,
+    "producer_elapsed_ms": 128590
+  },
+  "latency_definition": "First PostgreSQL assessment insert timestamp minus producer_time, including event-time waiting, checkpoint commits and any database outage; requires synchronized clocks",
+  "latency": {
+    "samples": 55000,
+    "p50_ms": 21068,
+    "p95_ms": 24067,
+    "p99_ms": 25018,
+    "max_ms": 26288,
+    "stages": {
+      "producer_to_evaluation": {
+        "samples": 55000,
+        "p50_ms": 10387,
+        "p95_ms": 15495,
+        "p99_ms": 19642,
+        "max_ms": 20634
+      },
+      "evaluation_to_storage_including_checkpoint": {
+        "samples": 55000,
+        "p50_ms": 10244,
+        "p95_ms": 13279,
+        "p99_ms": 14333,
+        "max_ms": 15465
+      },
+      "producer_to_acknowledgement": {
+        "samples": 55000,
+        "p50_ms": 5,
+        "p95_ms": 9,
+        "p99_ms": 78,
+        "max_ms": 3610
+      }
+    }
+  },
+  "steady_load": {
+    "status": "generator_limited",
+    "scope": "Offered payments to durable assessments; excludes warmup and post-publication drain",
+    "warmup_seconds": 30,
+    "window_seconds": 20,
+    "windows": [
+      {
+        "from_seconds": 30.0,
+        "to_seconds": 50.0,
+        "offered_backlog": 11987,
+        "stored_per_second": 496.85,
+        "scheduled_to_storage_p95_ms": 29675,
+        "generator_delay_p95_ms": 5684
+      },
+      {
+        "from_seconds": 50.0,
+        "to_seconds": 70.0,
+        "offered_backlog": 13515,
+        "stored_per_second": 423.6,
+        "scheduled_to_storage_p95_ms": 29688,
+        "generator_delay_p95_ms": 7607
+      },
+      {
+        "from_seconds": 70.0,
+        "to_seconds": 90.0,
+        "offered_backlog": 13234,
+        "stored_per_second": 514.05,
+        "scheduled_to_storage_p95_ms": 30128,
+        "generator_delay_p95_ms": 7607
+      },
+      {
+        "from_seconds": 90.0,
+        "to_seconds": 110.0,
+        "offered_backlog": 13679,
+        "stored_per_second": 477.75,
+        "scheduled_to_storage_p95_ms": 32168,
+        "generator_delay_p95_ms": 7607
+      }
+    ],
+    "criteria": {
+      "minimum_windows": 4,
+      "minimum_achieved_rate_fraction": 0.95,
+      "maximum_generator_p95_ms": 1000,
+      "maximum_backlog_growth_per_second": 10.0,
+      "maximum_latency_growth_ms": 2967.5
+    },
+    "backlog_growth_per_second": 23.975,
+    "latency_growth_ms": 2493,
+    "reason": "The driver did not maintain its offered schedule; this run cannot qualify the requested processing rate"
+  },
+  "reconciliation": {
+    "checked_at": "2026-10-12T20:27:42.780495+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 60629,
+    "evaluated": 55000,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "20927",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-00300115f6d9-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2000
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "checkpoint_interval_ms": 10000,
+  "checkpoint_min_pause_ms": 2000,
+  "checkpoint_runtime": {
+    "configuration": {
+      "mode": "exactly_once",
+      "interval": 10000,
+      "timeout": 120000,
+      "min_pause": 2000,
+      "max_concurrent": 1,
+      "externalization": {
+        "enabled": true,
+        "delete_on_cancellation": false
+      },
+      "state_backend": "EmbeddedRocksDBStateBackend",
+      "checkpoint_storage": "FileSystemCheckpointStorage",
+      "unaligned_checkpoints": false,
+      "tolerable_failed_checkpoints": 0,
+      "aligned_checkpoint_timeout": 0,
+      "checkpoints_after_tasks_finish": true,
+      "state_changelog_enabled": false,
+      "changelog_periodic_materialization_interval": 600000,
+      "changelog_storage": "memory"
+    },
+    "statistics": {
+      "counts": {
+        "restored": 0,
+        "total": 74,
+        "in_progress": 0,
+        "completed": 73,
+        "failed": 1
+      },
+      "summary": {
+        "checkpointed_size": {
+          "min": 665040,
+          "max": 18420575,
+          "avg": 1717764,
+          "p50": 675826.0,
+          "p90": 4617930.0,
+          "p95": 5836926.799999993,
+          "p99": 18420575.0,
+          "p999": 18420575.0
+        },
+        "state_size": {
+          "min": 1528049,
+          "max": 27530267,
+          "avg": 18930066,
+          "p50": 19718990.0,
+          "p90": 19808877.0,
+          "p95": 21012882.299999997,
+          "p99": 27530267.0,
+          "p999": 27530267.0
+        },
+        "end_to_end_duration": {
+          "min": 93,
+          "max": 1605,
+          "avg": 332,
+          "p50": 162.0,
+          "p90": 1109.4,
+          "p95": 1206.1999999999998,
+          "p99": 1605.0,
+          "p999": 1605.0
+        },
+        "alignment_buffered": {
+          "min": 0,
+          "max": 0,
+          "avg": 0,
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0
+        },
+        "processed_data": {
+          "min": 0,
+          "max": 80331,
+          "avg": 6873,
+          "p50": 0.0,
+          "p90": 38582.6,
+          "p95": 47990.39999999999,
+          "p99": 80331.0,
+          "p999": 80331.0
+        },
+        "persisted_data": {
+          "min": 0,
+          "max": 0,
+          "avg": 0,
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0
+        }
+      },
+      "latest": {
+        "completed": {
+          "className": "completed",
+          "id": 73,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836976503,
+          "latest_ack_timestamp": 1791836976679,
+          "checkpointed_size": 687770,
+          "state_size": 19722941,
+          "end_to_end_duration": 176,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-73",
+          "discarded": false
+        },
+        "savepoint": null,
+        "failed": null,
+        "restored": null
+      },
+      "history": [
+        {
+          "className": "completed",
+          "id": 73,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836976503,
+          "latest_ack_timestamp": 1791836976679,
+          "checkpointed_size": 687770,
+          "state_size": 19722941,
+          "end_to_end_duration": 176,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-73",
+          "discarded": false
+        },
+        {
+          "className": "completed",
+          "id": 72,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836966502,
+          "latest_ack_timestamp": 1791836966623,
+          "checkpointed_size": 679572,
+          "state_size": 19714743,
+          "end_to_end_duration": 121,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-72",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 71,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836953615,
+          "latest_ack_timestamp": 1791836953762,
+          "checkpointed_size": 679572,
+          "state_size": 19714743,
+          "end_to_end_duration": 147,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-71",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 70,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836943616,
+          "latest_ack_timestamp": 1791836943741,
+          "checkpointed_size": 679572,
+          "state_size": 19714743,
+          "end_to_end_duration": 125,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-70",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 69,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836933616,
+          "latest_ack_timestamp": 1791836933778,
+          "checkpointed_size": 679572,
+          "state_size": 19714743,
+          "end_to_end_duration": 162,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-69",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 68,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836920712,
+          "latest_ack_timestamp": 1791836920893,
+          "checkpointed_size": 681902,
+          "state_size": 19714743,
+          "end_to_end_duration": 181,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-68",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 67,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836910712,
+          "latest_ack_timestamp": 1791836910981,
+          "checkpointed_size": 686102,
+          "state_size": 19723914,
+          "end_to_end_duration": 269,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-67",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 66,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836900712,
+          "latest_ack_timestamp": 1791836900892,
+          "checkpointed_size": 677156,
+          "state_size": 19733264,
+          "end_to_end_duration": 180,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-66",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 65,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836887769,
+          "latest_ack_timestamp": 1791836887905,
+          "checkpointed_size": 677156,
+          "state_size": 19733264,
+          "end_to_end_duration": 136,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-65",
+          "discarded": true
+        },
+        {
+          "className": "completed",
+          "id": 64,
+          "status": "COMPLETED",
+          "is_savepoint": false,
+          "savepointFormat": null,
+          "trigger_timestamp": 1791836877769,
+          "latest_ack_timestamp": 1791836877902,
+          "checkpointed_size": 677156,
+          "state_size": 19733264,
+          "end_to_end_duration": 133,
+          "alignment_buffered": 0,
+          "processed_data": 0,
+          "persisted_data": 0,
+          "num_subtasks": 18,
+          "num_acknowledged_subtasks": 18,
+          "checkpoint_type": "CHECKPOINT",
+          "tasks": {},
+          "external_path": "s3://payment-risk/checkpoints/0f7a73dd094a0dc49ed2d78417f7732e/chk-64",
+          "discarded": true
+        }
+      ]
+    }
+  },
+  "flink_parallelism": 3,
+  "operator_parallelism": {
+    "Source: show-00300115f6d9.payments -> validate-payments": 3,
+    "Source: show-00300115f6d9.rules -> validate-rules -> Timestamps/Watermarks": 3,
+    "deduplicate": 3,
+    "validate-transaction-identity": 3,
+    "customer-risk -> (show-00300115f6d9.decisions: Writer -> show-00300115f6d9.decisions: Committer, show-00300115f6d9.late: Writer -> show-00300115f6d9.late: Committer)": 3,
+    "show-00300115f6d9.dlq: Writer -> show-00300115f6d9.dlq: Committer": 3
+  },
+  "driver": {
+    "placement": "Separate Compose container, shared host",
+    "cpus": 1,
+    "memory_mib": 512
+  },
+  "experiment": {
+    "source_sha256": {
+      "docker-compose.yml": "7cbebe480f22292ccfabf0c38d51d01fbd2e7ae780f341974bb7f043bf2e5d9f",
+      "config/performance-load.json": "a7fed28907922e0278166cb46ba7a6df3ef09776341914d48945ae2c90727c1a",
+      "scripts/showcase.py": "78cb5e039833bdb56632d026924a182bc9c41306a968ac064b13cbbb2770d6e6",
+      "scripts/benchmark-pipeline.py": "cb712fa45d594d8d2641646d6baa29b6d7b7caa9745575b85043afaa2d492adb",
+      "scripts/load_analysis.py": "2273261094c9475f9e35b35b86734fc7da9b15c61dcf53738dae47650b4c870c",
+      "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "72b0471fed37f8dd09ffb3c4d4e9bdf72da2dfed651cea2645abf811db3152da",
+      "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+      "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "ed503171e50341b33f9fb5412d8ba67512c90055d3818280db729c413ee789e8",
+      "src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java": "a5c4867cc14670b85b81047f10e9c47a8005c1e1defeae178308e5ae51611d76",
+      "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03",
+      "src/main/java/com/portfolio/paymentrisk/domain/Audit.java": "92e3a0c5f504ce143664b86bd88bffce3d8d0a9f6e78ccfa3807a0da473be215",
+      "src/main/java/com/portfolio/paymentrisk/tools/MaterializerRows.java": "278ca485e59013788a3ef5279d7173f345b68760d69accfc93134ba683b4e9e8",
+      "src/main/java/com/portfolio/paymentrisk/storage/PostgresWriter.java": "be16f13001e145f9dfb5607be212a81f6fec5a58800d9c532f508978c07d51b4",
+      "src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java": "6ad2eb8cfe2a94016953c7cd8210117f420120815c7f9e947a53fc13ce0376d6",
+      "src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java": "80be12b55b93432af1399d48f3dda4b1b6e6b5d9f43aaac298d2a911d868efec",
+      "src/main/java/com/portfolio/paymentrisk/tools/MaterializerMetrics.java": "341ecf7dcb6793e53d8ab812cec4a16a794912536a5bb1ce6c955c183fb7fd02",
+      "infrastructure/docker/postgres.sql": "ade63ad43432c2714666acf5f84b3125d835f3d482ffd5e318441d637c150724",
+      "web/server/postgres-reader.mjs": "35359adc99d00d91b983d594737533aae1bd97cfd207dd44820fffa0d64b7d6b"
+    },
+    "config": {
+      "seed": 7,
+      "customers": 1000,
+      "min_payments": 55,
+      "max_payments": 55,
+      "history_minutes": 1440,
+      "publish_rate": 500,
+      "retry_percent": 10,
+      "ordinary_amount_min": 250,
+      "ordinary_amount_max": 15000,
+      "large_amount_min": 80000,
+      "large_amount_max": 150000,
+      "profiles": {
+        "normal": 45,
+        "new_device": 10,
+        "takeover": 10,
+        "card_testing": 5,
+        "low_burst": 5,
+        "trusted_device": 5,
+        "known_devices": 10,
+        "checkout_retry": 10
+      }
+    },
+    "arguments": {
+      "config": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791836147410880866-config.json",
+      "historical": false,
+      "no_build": true,
+      "database_outage": false,
+      "parallelism": 3,
+      "checkpoint_interval_ms": 10000,
+      "checkpoint_min_pause_ms": 2000,
+      "warmup_seconds": 30,
+      "window_seconds": 20,
+      "rate": 500,
+      "duration_seconds": 110
+    },
+    "source_commit": "4f049e90bdd6669cf7178117f80a59dd7d2b614b",
+    "image_id": "sha256:b06954b855325fdbfdcdc74902647974c57eef539f16967974c466ae2e846f3e",
+    "environment": {
+      "logical_cpus": 20,
+      "memory_bytes": 16605831168
+    },
+    "log": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791836147410880866.log"
+  },
+  "config": {
+    "seed": 7,
+    "customers": 1000,
+    "min_payments": 55,
+    "max_payments": 55,
+    "history_minutes": 1440,
+    "publish_rate": 500,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "recovery": null,
+  "metrics_file": "/home/cilio/devProjects/data_engineering/payment_risk/artifacts/worktrees/production-plan/artifacts/pipeline-load/1791836147410880866-metrics.jsonl",
+  "metrics_summary": {
+    "scope": "Entire command, including startup and final drain; not a steady-state saturation test",
+    "sample_errors": 2,
+    "series": {
+      "risk_materializer_insert_errors_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_insert_duration_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 96.786023294,
+        "max": 96.786023294,
+        "last": 83.984832002,
+        "mean": 71.95543624717561
+      },
+      "risk_materializer_insert_duration_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 237.0,
+        "max": 240.0,
+        "last": 240.0,
+        "mean": 203.83206106870225
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 449.0,
+        "last": 0.0,
+        "mean": 29.17557251908399
+      },
+      "risk_materializer_storage_available {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0,
+        "mean": 1.0
+      },
+      "risk_materializer_insert_errors_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_insert_duration_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 86.250597628,
+        "max": 86.250597628,
+        "last": 85.916384004,
+        "mean": 75.11264888059543
+      },
+      "risk_materializer_insert_duration_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 10087.0,
+        "max": 11576.0,
+        "last": 11576.0,
+        "mean": 10067.366412213738
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0,
+        "mean": 1.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 38963271.0,
+        "max": 38963271.0,
+        "last": 38963271.0,
+        "mean": 34203761.6870229
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 60629.0,
+        "max": 60629.0,
+        "last": 60629.0,
+        "mean": 53226.587786259544
+      },
+      "risk_materializer_batches_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 10087.0,
+        "max": 11576.0,
+        "last": 11576.0,
+        "mean": 10067.335877862597
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 178977247.0,
+        "max": 178977276.0,
+        "last": 178977276.0,
+        "mean": 152261076.48854956
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 55002.0,
+        "max": 55002.0,
+        "last": 55002.0,
+        "mean": 46796.77862595419
+      },
+      "risk_materializer_batches_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 237.0,
+        "max": 240.0,
+        "last": 240.0,
+        "mean": 203.83206106870225
+      },
+      "risk_materializer_decode_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 6.072171323,
+        "max": 6.072171323,
+        "last": 5.192689605,
+        "mean": 4.522829743961831
+      },
+      "risk_materializer_decode_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 55002.0,
+        "max": 55002.0,
+        "last": 55002.0,
+        "mean": 46818.2290076336
+      },
+      "risk_materializer_offset_commit_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 0.48732265,
+        "max": 0.48732265,
+        "last": 0.417411991,
+        "mean": 0.3596255324351144
+      },
+      "risk_materializer_offset_commit_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 237.0,
+        "max": 240.0,
+        "last": 240.0,
+        "mean": 203.83206106870225
+      },
+      "risk_materializer_sql_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 95.153904806,
+        "max": 95.153904806,
+        "last": 82.333765567,
+        "mean": 70.5728506540382
+      },
+      "risk_materializer_database_commit_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 131,
+        "first": 1.313677953,
+        "max": 1.428173672,
+        "last": 1.428173672,
+        "mean": 1.1880631127480916
+      },
+      "risk_materializer_decode_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_decode_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_offset_commit_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 14.785276164,
+        "max": 15.673669411,
+        "last": 15.673669411,
+        "mean": 13.811546089832065
+      },
+      "risk_materializer_offset_commit_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 10087.0,
+        "max": 11576.0,
+        "last": 11576.0,
+        "mean": 10067.335877862597
+      },
+      "risk_materializer_sql_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_database_commit_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "backpressure_ms_per_second {}": {
+        "samples": 131,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 20.352000000000004
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 20.944000000000003
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 46.768000000000015
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 45.82399999999998
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.62400000000001
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.095999999999997
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 46.38399999999998
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 18.24000000000001
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.095999999999997
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.192000000000004
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 20.928000000000004
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.192000000000004
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.400000000000016
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.688000000000017
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 17.744
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.095999999999997
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 18.44800000000001
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 125,
+        "first": 1000.0,
+        "max": 1000.0,
+        "last": 0.0,
+        "mean": 16.640000000000004
+      },
+      "source_lag_max {}": {
+        "samples": 40,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "checkpoint_duration_ms {}": {
+        "samples": 124,
+        "first": -1.0,
+        "max": 1605.0,
+        "last": 174.0,
+        "mean": 360.6935483870967
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 121,
+        "first": 466.0,
+        "max": 466.0,
+        "last": 311.0,
+        "mean": 316.2685950413224
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 121,
+        "first": 499.0,
+        "max": 499.0,
+        "last": 329.0,
+        "mean": 331.4752066115703
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 121,
+        "first": 490.1999999999998,
+        "max": 490.1999999999998,
+        "last": 341.75,
+        "mean": 341.9847107438016
+      }
+    }
+  },
+  "load_metrics_summary": {
+    "scope": "Publishing after warmup; not a steady-state saturation test",
+    "sample_errors": 0,
+    "series": {
+      "risk_materializer_insert_errors_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_insert_duration_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 2.866954709,
+        "max": 56.312300983,
+        "last": 56.312300983,
+        "mean": 31.0775969378
+      },
+      "risk_materializer_insert_duration_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 6.0,
+        "max": 157.0,
+        "last": 157.0,
+        "mean": 86.39999999999999
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 449.0,
+        "last": 0.0,
+        "mean": 213.33333333333331
+      },
+      "risk_materializer_storage_available {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0,
+        "mean": 1.0
+      },
+      "risk_materializer_insert_errors_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_insert_duration_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 20.507784621,
+        "max": 77.589182582,
+        "last": 77.589182582,
+        "mean": 46.928476175600004
+      },
+      "risk_materializer_insert_duration_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 2538.0,
+        "max": 10374.0,
+        "last": 10374.0,
+        "mean": 6215.599999999999
+      },
+      "risk_materializer_records_lag_max {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_storage_available {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 1.0,
+        "max": 1.0,
+        "last": 1.0,
+        "mean": 1.0
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 10599560.0,
+        "max": 35434364.0,
+        "last": 35434364.0,
+        "mean": 22193882.8
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 16515.0,
+        "max": 55158.0,
+        "last": 55158.0,
+        "mean": 34562.0
+      },
+      "risk_materializer_batches_total {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 2538.0,
+        "max": 10374.0,
+        "last": 10374.0,
+        "mean": 6215.333333333334
+      },
+      "risk_materializer_batch_bytes_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 4366550.0,
+        "max": 118081203.0,
+        "last": 118081203.0,
+        "mean": 64784846.53333334
+      },
+      "risk_materializer_batch_rows_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 1354.0,
+        "max": 36316.0,
+        "last": 36316.0,
+        "mean": 19944.533333333333
+      },
+      "risk_materializer_batches_total {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 6.0,
+        "max": 157.0,
+        "last": 157.0,
+        "mean": 86.39999999999999
+      },
+      "risk_materializer_decode_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 0.839580706,
+        "max": 3.74259855,
+        "last": 3.74259855,
+        "mean": 2.4632976408
+      },
+      "risk_materializer_decode_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 1354.0,
+        "max": 36316.0,
+        "last": 36316.0,
+        "mean": 20093.733333333334
+      },
+      "risk_materializer_offset_commit_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 0.015331985,
+        "max": 0.294598916,
+        "last": 0.294598916,
+        "mean": 0.1698783443333333
+      },
+      "risk_materializer_offset_commit_seconds_count {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 6.0,
+        "max": 157.0,
+        "last": 157.0,
+        "mean": 86.39999999999999
+      },
+      "risk_materializer_sql_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 2.813780601,
+        "max": 55.442470312,
+        "last": 55.442470312,
+        "mean": 30.591030353799997
+      },
+      "risk_materializer_database_commit_seconds_sum {\"instance\": \"materializer:9405\", \"job\": \"materializer\"}": {
+        "samples": 15,
+        "first": 0.037113392,
+        "max": 0.711776077,
+        "last": 0.711776077,
+        "mean": 0.3922445630666666
+      },
+      "risk_materializer_decode_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_decode_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_offset_commit_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 4.895294839,
+        "max": 14.39246522,
+        "last": 14.39246522,
+        "mean": 9.458794845866668
+      },
+      "risk_materializer_offset_commit_seconds_count {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 2538.0,
+        "max": 10374.0,
+        "last": 10374.0,
+        "mean": 6215.333333333334
+      },
+      "risk_materializer_sql_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "risk_materializer_database_commit_seconds_sum {\"instance\": \"payment-archiver:9406\", \"job\": \"payment-archiver\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 27.0,
+        "last": 27.0,
+        "mean": 4.933333333333333
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 29.0,
+        "last": 29.0,
+        "mean": 4.933333333333334
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 77.0,
+        "max": 173.0,
+        "last": 173.0,
+        "mean": 101.4
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 73.0,
+        "max": 171.0,
+        "last": 171.0,
+        "mean": 101.13333333333333
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 73.0,
+        "max": 173.0,
+        "last": 173.0,
+        "mean": 101.80000000000001
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 1.0,
+        "last": 1.0,
+        "mean": 0.13333333333333333
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_939b99ae827a2fc3d9e889cf744ad060_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"939b99ae827a2fc3d9e889cf744ad060\", \"task_name\": \"validate_transaction_identity\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 26.0,
+        "last": 26.0,
+        "mean": 4.666666666666667
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_0165b87208a2ecfabfef5e81d300d3c2_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"0165b87208a2ecfabfef5e81d300d3c2\", \"task_name\": \"show_00300115f6d9_dlq:_Writer____show_00300115f6d9_dlq:_Committer\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 8.0,
+        "last": 8.0,
+        "mean": 1.0666666666666667
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_950ca89c95fc197e1b518dbf06f6a368_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"950ca89c95fc197e1b518dbf06f6a368\", \"task_name\": \"Source:_show_00300115f6d9_rules____validate_rules____Timestamps_Watermarks\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_9511ae477573f9bfe4a5943d8ccf49c2_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"9511ae477573f9bfe4a5943d8ccf49c2\", \"task_name\": \"deduplicate\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 7.0,
+        "last": 7.0,
+        "mean": 0.9333333333333333
+      },
+      "flink_taskmanager_job_task_busyTimeMsPerSecond {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_c4f089b3c725b16bd8cfe4fe993c85e3_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"c4f089b3c725b16bd8cfe4fe993c85e3\", \"task_name\": \"Source:_show_00300115f6d9_payments____validate_payments\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"1\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_1_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 230.0,
+        "max": 420.0,
+        "last": 372.25,
+        "mean": 312.2666666666667
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"0\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_0_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 252.75,
+        "max": 421.25,
+        "last": 357.25,
+        "mean": 308.95
+      },
+      "flink_taskmanager_job_task_operator_risk_evaluation_duration_us {\"host\": \"172_24_0_11\", \"instance\": \"taskmanager:9249\", \"job\": \"flink\", \"job_id\": \"0f7a73dd094a0dc49ed2d78417f7732e\", \"job_name\": \"payment_risk_v1\", \"operator_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"operator_name\": \"customer_risk\", \"quantile\": \"0.95\", \"subtask_index\": \"2\", \"task_attempt_id\": \"792a1756d1d43ff506fb74d4a1f22989_1e2a1e574e452d0270232e7152cb4545_2_0\", \"task_attempt_num\": \"0\", \"task_id\": \"1e2a1e574e452d0270232e7152cb4545\", \"task_name\": \"customer_risk_____show_00300115f6d9_decisions:_Writer____show_00300115f6d9_decisions:_Committer__show_00300115f6d9_late:_Writer____show_00300115f6d9_late:_Committer_\", \"tm_id\": \"172_24_0_11:34965_61c056\"}": {
+        "samples": 15,
+        "first": 278.75,
+        "max": 420.25,
+        "last": 361.75,
+        "mean": 314.45
+      },
+      "source_lag_max {}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "backpressure_ms_per_second {}": {
+        "samples": 15,
+        "first": 0.0,
+        "max": 0.0,
+        "last": 0.0,
+        "mean": 0.0
+      },
+      "checkpoint_duration_ms {}": {
+        "samples": 15,
+        "first": 971.0,
+        "max": 1226.0,
+        "last": 1145.0,
+        "mean": 1052.8666666666668
+      }
+    }
+  },
+  "source_commit": "4f049e90bdd6669cf7178117f80a59dd7d2b614b",
+  "source_sha256": {
+    "docker-compose.yml": "7cbebe480f22292ccfabf0c38d51d01fbd2e7ae780f341974bb7f043bf2e5d9f",
+    "config/performance-load.json": "a7fed28907922e0278166cb46ba7a6df3ef09776341914d48945ae2c90727c1a",
+    "scripts/showcase.py": "78cb5e039833bdb56632d026924a182bc9c41306a968ac064b13cbbb2770d6e6",
+    "scripts/benchmark-pipeline.py": "cb712fa45d594d8d2641646d6baa29b6d7b7caa9745575b85043afaa2d492adb",
+    "scripts/load_analysis.py": "2273261094c9475f9e35b35b86734fc7da9b15c61dcf53738dae47650b4c870c",
+    "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "72b0471fed37f8dd09ffb3c4d4e9bdf72da2dfed651cea2645abf811db3152da",
+    "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+    "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "ed503171e50341b33f9fb5412d8ba67512c90055d3818280db729c413ee789e8",
+    "src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java": "a5c4867cc14670b85b81047f10e9c47a8005c1e1defeae178308e5ae51611d76",
+    "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03",
+    "src/main/java/com/portfolio/paymentrisk/domain/Audit.java": "92e3a0c5f504ce143664b86bd88bffce3d8d0a9f6e78ccfa3807a0da473be215",
+    "src/main/java/com/portfolio/paymentrisk/tools/MaterializerRows.java": "278ca485e59013788a3ef5279d7173f345b68760d69accfc93134ba683b4e9e8",
+    "src/main/java/com/portfolio/paymentrisk/storage/PostgresWriter.java": "be16f13001e145f9dfb5607be212a81f6fec5a58800d9c532f508978c07d51b4",
+    "src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java": "6ad2eb8cfe2a94016953c7cd8210117f420120815c7f9e947a53fc13ce0376d6",
+    "src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java": "80be12b55b93432af1399d48f3dda4b1b6e6b5d9f43aaac298d2a911d868efec",
+    "src/main/java/com/portfolio/paymentrisk/tools/MaterializerMetrics.java": "341ecf7dcb6793e53d8ab812cec4a16a794912536a5bb1ce6c955c183fb7fd02",
+    "infrastructure/docker/postgres.sql": "ade63ad43432c2714666acf5f84b3125d835f3d482ffd5e318441d637c150724",
+    "web/server/postgres-reader.mjs": "35359adc99d00d91b983d594737533aae1bd97cfd207dd44820fffa0d64b7d6b"
+  },
+  "source_dirty": true,
+  "supplemental_observations": {
+    "routing": {
+      "run_id": "show-00300115f6d9",
+      "customers": 1000,
+      "payment_and_late_deliveries_by_partition": {
+        "0": 20926,
+        "1": 20589,
+        "2": 19110
+      },
+      "each_customer_has_one_partition": true
+    },
+    "comparison_limits": "One trial per parallelism on a shared host, sequential runs with retained data. Risk processor and database writer/schema source hashes match. Between trials, auxiliary late-input routing and benchmark reporting changed; regular live-payment routing is identical."
+  }
+}

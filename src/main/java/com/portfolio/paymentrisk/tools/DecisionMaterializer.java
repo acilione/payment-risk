@@ -50,6 +50,7 @@ public final class DecisionMaterializer {
             throw new java.io.IOException("Decode budget exceeded; offsets remain uncommitted");
           // Registry/network outages propagate; they are not malformed payment records.
           String table, row;
+          long decodeStarted = System.nanoTime();
           try {
             if (record.topic().equals(c.topic("risk.decisions"))) {
               var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
@@ -71,6 +72,9 @@ public final class DecisionMaterializer {
                         record.topic().equals(c.topic("risk.decisions"))
                             ? "INVALID_DECISION"
                             : "INVALID_OUTCOME"));
+          } finally {
+            metrics.decodeNanos.addAndGet(System.nanoTime() - decodeStarted);
+            metrics.decoded.incrementAndGet();
           }
           batch.add(table, row, record);
         }

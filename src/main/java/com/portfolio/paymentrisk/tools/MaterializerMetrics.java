@@ -20,6 +20,12 @@ public final class MaterializerMetrics implements AutoCloseable {
       batchRows = new AtomicLong(),
       batches = new AtomicLong();
   public final AtomicLong unresolved = new AtomicLong(-1);
+  public final AtomicLong decodeNanos = new AtomicLong(),
+      decoded = new AtomicLong(),
+      offsetCommitNanos = new AtomicLong(),
+      offsetCommits = new AtomicLong(),
+      sqlNanos = new AtomicLong(),
+      databaseCommitNanos = new AtomicLong();
   public volatile boolean storageHealthy;
   private final HttpServer server;
 
@@ -51,6 +57,16 @@ public final class MaterializerMetrics implements AutoCloseable {
 
   public String prometheus() {
     return metric("risk_materializer_batch_bytes_total", "counter", batchBytes.get())
+        + metric("risk_materializer_decode_seconds_sum", "counter", decodeNanos.get() / 1e9)
+        + metric("risk_materializer_decode_seconds_count", "counter", decoded.get())
+        + metric(
+            "risk_materializer_offset_commit_seconds_sum", "counter", offsetCommitNanos.get() / 1e9)
+        + metric("risk_materializer_offset_commit_seconds_count", "counter", offsetCommits.get())
+        + metric("risk_materializer_sql_seconds_sum", "counter", sqlNanos.get() / 1e9)
+        + metric(
+            "risk_materializer_database_commit_seconds_sum",
+            "counter",
+            databaseCommitNanos.get() / 1e9)
         + metric("risk_materializer_batch_rows_total", "counter", batchRows.get())
         + metric("risk_materializer_batches_total", "counter", batches.get())
         + metric("risk_materializer_unresolved_records", "gauge", unresolved.get())

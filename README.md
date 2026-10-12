@@ -134,6 +134,8 @@ flowchart LR
 
 [PaymentRiskJob](src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java) assembles the stream operators. Kafka separates payment intake, stateful evaluation and database writes, so a database outage can accumulate a backlog without requiring Flink to call the database. The input archiver is an independent consumer: it preserves original records even when validation or risk processing cannot complete.
 
+Payment and decision topics have three partitions locally. Live producers use the UTF-8 `customer_id` as the Kafka key and leave partition selection to Kafka's default keyed partitioner; the CLI, load generator and decision sink follow the same contract. Changing the partition count can change a customer's partition. Flink's `keyBy` independently assigns managed state, including the separate event-ID and transaction-ID checks.
+
 | Technology                                    | Responsibility                                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Java 17 bytecode; Java 21 containers          | Flink application, rule calculation, producers and database consumers.                                 |
@@ -168,7 +170,7 @@ The code separates processing responsibilities:
 
 [Validate](src/main/java/com/portfolio/paymentrisk/processor/Validate.java) requires nonblank identifiers of at most 128 characters, a positive amount no greater than 1,000,000,000,000 cents, EUR currency, an ISO country code and a supported authorization status. Event time must be positive and no more than five minutes ahead of the validation clock. Payloads above 1 MiB are rejected. Invalid payments and rules go to `payments.dlq`; registry connectivity or authentication failures trigger recovery instead of being reported as invalid business data.
 
-Valid payments pass through two keyed identity checks: first `keyBy(event_id)`, then `keyBy(transaction_id)`. [Deduplicate](src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java) compares event fingerprints excluding `producer_time`; the transaction check compares canonical business fields excluding both `producer_time` and `event_id`. A republished event with a new event ID therefore remains the same transaction. An identical retry is suppressed; changed content under an existing identity fails processing. Both indexes expire after 24 hours of processing time by default (`DEDUP_TTL_MS`), including downtime; reads do not extend retention. This bounds live state and is not permanent business uniqueness.
+Valid payments pass through two keyed identity checks: first `keyBy(event_id)`, then `keyBy(transaction_id)`. These repartitions let the checks detect reused identities even if the incoming `customer_id` changes. [Deduplicate](src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java) compares event fingerprints excluding `producer_time`; the transaction check compares canonical business fields excluding both `producer_time` and `event_id`. A republished event with a new event ID therefore remains the same transaction. An identical retry is suppressed; changed content under an existing identity fails processing. Both indexes expire after 24 hours of processing time by default (`DEDUP_TTL_MS`), including downtime; reads do not extend retention. This bounds live state and is not permanent business uniqueness.
 
 ### Admission and event-time ordering
 
@@ -222,6 +224,8 @@ Each assessment records every rule, including nonmatches: observed value, thresh
 For fewer than 64 retained payments, [RiskFeatures](src/main/java/com/portfolio/paymentrisk/domain/RiskFeatures.java) computes observations in one pass over a lazy history iterator. It does not copy the complete history into a list. For denser histories, [RollingFeatures](src/main/java/com/portfolio/paymentrisk/processor/RollingFeatures.java) maintains exact aggregates and device reference counts; expired entries are subtracted as event time advances. A change to a rule's type, currency or window rebuilds that aggregate from retained history. Incremental state remains active until history and pending records are empty.
 
 Pending admission stores records individually instead of rewriting a growing timestamp bucket. [StateExpiryIndex](src/main/java/com/portfolio/paymentrisk/processor/StateExpiryIndex.java) indexes history and device expiry, avoiding a scan of all customer devices for each payment. Timer callbacks keep counters locally while evaluating a timestamp group and persist them once at completion; per-payment state limits still apply. A per-subtask cache holds at most 32 prepared policies containing sorted rules, their fingerprint and canonical audit JSON. It is derived, transient state and is rebuilt after restoration.
+
+Admission also reuses the rule snapshot until an accepted broadcast update invalidates it. Each queued payment still stores its own snapshot. Canonical audit JSON sorts object keys recursively and serializes once, avoiding repeated parsing of nested fields; deduplication computes transaction facts only at the transaction-identity stage and reuses state values within each call.
 
 These bounds do not eliminate all concentrated work: a complete same-timestamp group is still sorted and evaluated in one callback, and one customer's state belongs to one subtask. Exceeding a pending, history or device limit fails the job rather than discarding observations and producing an incomplete score.
 
@@ -296,7 +300,7 @@ There are two publishing modes:
 | Mode      | Event time and partitioning                                                                                                    | Purpose                                                                                                                              |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Showcase  | Preserves generated historical timestamps; sends business payments chronologically on one partition with one outstanding send. | Reproducible behavioral timelines without accelerated history overtaking across source partitions.                                   |
-| Live load | Uses current event timestamps; hashes customers across available partitions with at most 512 outstanding sends.                | Measures pipeline throughput and latency. Compressed timing changes the behavioral windows, so this is not a scenario-accuracy test. |
+| Live load | Uses current event timestamps and Kafka's default customer-keyed partitioning, with at most 512 outstanding sends.             | Measures pipeline throughput and latency. Compressed timing changes the behavioral windows, so this is not a scenario-accuracy test. |
 
 For a finite run, the producer waits until a source checkpoint covers the generated history, then sends a reserved `showcase-control-` record to each partition to advance watermarks. Controls use ordinary payment records but are excluded from business counts and customer examples. With `--include-outcomes`, the producer also sends malformed bytes and a deliberately late payment after observing a committed assessment for that customer.
 
@@ -636,20 +640,41 @@ To measure the complete live pipeline:
 
 ```bash
 make showcase-stop
-python3 scripts/benchmark-pipeline.py --rate 500 --duration-seconds 150
+python3 scripts/benchmark-pipeline.py --rate 500 --duration-seconds 110
 ```
 
 The driver runs separately from Flink, records intended send times, and distinguishes generator delay from processing backlog. Reports in `artifacts/pipeline-load/` include acknowledgement, evaluation and first PostgreSQL storage timings, exact reconciliation and checkpoint configuration. The default analysis excludes a 30-second warmup and requires four complete 20-second observation windows. A finite completed run is not proof of maximum sustainable throughput. `--checkpoint-interval-ms 2000 --checkpoint-min-pause-ms 500` tests a shorter checkpoint schedule without disabling transactional output.
 
-The [live-load report](docs/evidence/postgres-live-load.json) reconciled 75,000 assessments and 82,635 archived inputs with no unresolved outcomes. End-to-end p95 latency was 33.4 seconds. Although average publishing reached 500 payments/second over 150 seconds, send timing drifted by up to 11.8 seconds at the measured p95; the run is classified as generator-limited and does not qualify sustainable throughput at that rate. Event-time waiting and checkpoint visibility remain part of the measured latency.
+The latest comparison used three Kafka partitions, one 2 GiB TaskManager, a 10-second checkpoint interval and a requested 500 payments/second for 110 seconds. Each run reconciled 55,000 assessments, one invalid input and one late payment, with no missing archived inputs.
 
-Run `mvn -Dtest=StateLoadTest -Drisk.load=true test` to profile the customer operator with embedded RocksDB and compare its observations against the reference evaluator. It excludes Kafka and database transport.
+| Flink parallelism | Producer-to-insert p95 | Producer-to-evaluation p95 | Mean customer-task busy time |
+| ----------------- | --------------------: | ------------------------: | ---------------------------: |
+| [2 subtasks](docs/evidence/flink-parallelism-2.json) | 27.0 s | 15.7 s | 12.5% |
+| [3 subtasks](docs/evidence/flink-parallelism-3.json) | 24.1 s | 15.5 s | 10.1% |
+
+Both runs were generator-limited, so they do not qualify sustainable throughput at that rate. This is one trial per setting on a shared host with retained data; the difference is not an established scaling factor. Flink had substantial processing headroom. PostgreSQL statement execution occupied 82-95 seconds of materializer work, compared with 5-6 seconds decoding and roughly one second committing to the database. Event-time waiting and checkpoint visibility also contribute to latency. The insert timestamp is recorded inside the database transaction, not at commit acknowledgement.
+
+Run `mvn -Dtest=StateLoadTest -Drisk.load=true test` to profile the customer operator with embedded RocksDB and compare its observations against the reference evaluator. It excludes Kafka and database transport. The [before/after comparison](docs/evidence/flink-state-comparison.json) covers the JSON and state-access changes: the typical profile improved, other profiles were mixed, and a large same-timestamp callback still exceeded its exploratory budget. Every profile retained exact scores, evidence and post-restore behavior.
+
+### Parallelism and bottlenecks
+
+Stop the previous showcase, then use `--parallelism 3 --no-build` with the benchmark command above to repeat the comparison. `scripts/showcase.py run` accepts the same parallelism option. The default remains two; experiments assign matching TaskManager slots and retain the same total TaskManager memory. Reports verify operator parallelism and include task busy time, backpressure and separate materializer decoding, SQL execution, database commit and Kafka offset-commit timings. Publishing-period utilization excludes startup, warmup and final drain.
+
+Three source subtasks can each read one payment partition. Additional subtasks cannot add readers for those three partitions, although downstream keyed computation can use more subtasks. One customer's state still belongs to one subtask. Extra materializers in the same consumer group can divide decision partitions, but concurrent database transactions also contend on shared topic and aggregate rows.
+
+To measure that database contention independently:
+
+```bash
+node --env-file=.env scripts/benchmark-projection-writers.mjs
+```
+
+The script uses isolated temporary databases, 250-row batches and 9,000 fixture-derived assessments across 999 customers per trial. Each customer stays on one source partition. It runs one and three writers in both orders and verifies assessment and summary counts. The [writer comparison](docs/evidence/projection-writers.json) measured 685-757 assessments/second with one writer and 729-778 with three; the concurrent trials observed blocked writers in most lock samples. These short local trials identify contention, not production capacity. Sharding summary counters or combining their updates within each accepted batch should precede further writer scaling, while preserving atomic identity checks and summary updates.
 
 ### Remaining limits
 
 - PostgreSQL prevents duplicate stored assessments permanently while identities are retained. Flink's input deduplication remains bounded by its processing-time TTL. Arbitrary historical resubmission into live state is not supported; a durable acceptance service before Flink is needed if the source cannot honor that contract.
 - Initial assessment conflicts require review. Reassessment promotion, corrections and lifecycle events are deliberately rejected rather than silently changing totals.
-- Summary updates contend on shared rows under concentrated traffic. Sustained ingestion, multiple writers, growing customer cardinality and database failover require further load tests. Customer snapshot versions and delivery evidence have no automatic retention policy.
+- Summary updates contend on shared rows under concentrated traffic. The writer experiment covers short local concurrency; sustained ingestion, growing customer cardinality and database failover require further load tests. Customer snapshot versions and delivery evidence have no automatic retention policy.
 - ClickHouse analytical export is not implemented in this branch. Add it only if measured analytical queries justify it; use replay-safe versioned aggregates rather than additive retry-prone deliveries.
 - Local services use single database and broker instances. Replication, backups and restore procedures need deployment-specific verification.
 
@@ -658,3 +683,5 @@ Run `mvn -Dtest=StateLoadTest -Drisk.load=true test` to profile the customer ope
 [The Dataflow Model](https://research.google/pubs/the-dataflow-model-a-practical-approach-to-balancing-correctness-latency-and-cost-in-massive-scale-unbounded-out-of-order-data-processing/) distinguishes result timing from completeness; finalized assessments retain their existing event-time contract. [Lightweight Asynchronous Snapshots](https://arxiv.org/abs/1506.08603) and [Flink's latency guidance](https://flink.apache.org/2022/05/23/getting-into-low-latency-gears-with-apache-flink-part-two/) motivate checkpoint experiments that preserve recovery guarantees.
 
 [Noria](https://www.usenix.org/conference/osdi18/presentation/gjengset) motivates reusable, incrementally maintained read results. Here the database acceptance transaction establishes identity before updating summaries, replacing repeated historical publication. [Benchmarking Distributed Stream Data Processing Systems](https://arxiv.org/abs/1802.08496) motivates measuring offered load, backlog and driver delay separately from completed finite workloads.
+
+[SCARFF](https://arxiv.org/abs/1709.08920), sections 5.1-5.2, identifies feature engineering and Cassandra history reads as its largest costs, with diminishing scaling gains from shuffling. Its conclusion also reports falling back to full-table reads and filtering in Spark. Its experiments used 240-second batches, so their throughput is not a latency target for this application. Here Flink calculates features from local keyed state without per-payment database lookups. The applicable lesson is to measure feature computation, state access and external writes separately before increasing parallelism.

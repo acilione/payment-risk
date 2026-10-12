@@ -309,7 +309,8 @@ def run(args):
     (run_dir / "config.json").write_bytes(config.read_bytes())
     env = {"TRANSACTIONAL_PREFIX": run_id, "KAFKA_GROUP": run_id, "ARCHIVER_GROUP": run_id + "-archive", "MATERIALIZER_GROUP": run_id + "-materializer"}
     env.update(FLINK_CHECKPOINT_INTERVAL_MS=str(args.checkpoint_interval_ms),
-               FLINK_CHECKPOINT_MIN_PAUSE_MS=str(args.checkpoint_min_pause_ms))
+               FLINK_CHECKPOINT_MIN_PAUSE_MS=str(args.checkpoint_min_pause_ms),
+               FLINK_PARALLELISM=str(args.parallelism), FLINK_TASK_SLOTS=str(args.parallelism))
     for key, suffix in [("PAYMENTS", "payments"), ("RULES", "rules"), ("DECISIONS", "decisions"), ("DLQ", "dlq"), ("LATE", "late")]:
         env[key + "_TOPIC"] = run_id + "." + suffix
     (WORK / "compose.env").write_text("".join(k + "=" + v + "\n" for k, v in env.items()))
@@ -319,6 +320,7 @@ def run(args):
                     "payment-risk:0.1.0", "-cp", JAR, CLASS, "/config.json", "--validate"], check=True)
     report = {"run_id": run_id, "status": "STARTING", "started_at": now(), "config": json.loads(config.read_text()),
               "checkpoint_interval_ms": args.checkpoint_interval_ms, "checkpoint_min_pause_ms": args.checkpoint_min_pause_ms,
+              "flink_parallelism": args.parallelism,
               "source": "Kafka / Flink / PostgreSQL", "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True).strip())}
     def publish():
@@ -472,11 +474,14 @@ def main():
     parser.add_argument("--no-build", action="store_true", help="Use images already built from this checkout")
     parser.add_argument("--include-outcomes", action="store_true", help="Include an invalid record and a payment arriving after proven finalization")
     parser.add_argument("--load", action="store_true", help="Bounded asynchronous publication across partitions using live event times")
+    parser.add_argument("--parallelism", type=int, default=2, help="Flink parallelism and slots in the local TaskManager (1-16)")
     parser.add_argument("--checkpoint-interval-ms", type=int, default=10000)
     parser.add_argument("--checkpoint-min-pause-ms", type=int, default=2000)
     parser.add_argument("--database-outage", action="store_true", help="Stop the showcase database during generation, recover it and replay decisions")
     parser.add_argument("--outage-hold-seconds", type=int, default=20, help="Keep the observed backlog visible before recovery (0-60 seconds)")
     args = parser.parse_args()
+    if not 1 <= args.parallelism <= 16:
+        parser.error("--parallelism must be between 1 and 16")
     if not 0 <= args.outage_hold_seconds <= 60:
         parser.error("--outage-hold-seconds must be between 0 and 60")
     if not 1000 <= args.checkpoint_interval_ms <= 60000 or not 0 <= args.checkpoint_min_pause_ms <= args.checkpoint_interval_ms:

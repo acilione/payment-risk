@@ -52,26 +52,28 @@ public class Deduplicate extends KeyedProcessFunction<String, String, String> {
   public void processElement(String value, Context c, Collector<String> out) throws Exception {
     var tx = com.portfolio.paymentrisk.Json.read(value);
     String hash = com.portfolio.paymentrisk.domain.Audit.inputHash(tx);
-    String facts = com.portfolio.paymentrisk.domain.Audit.transactionFacts(tx);
+    String facts =
+        identity.equals("TRANSACTION")
+            ? com.portfolio.paymentrisk.domain.Audit.transactionFacts(tx)
+            : null;
     if (Boolean.TRUE.equals(seen.value())) {
-      if (fingerprint.value() == null)
+      String previousHash = fingerprint.value();
+      String previousFacts = identity.equals("TRANSACTION") ? businessFacts.value() : null;
+      if (previousHash == null)
         throw new IllegalStateException(
             identity + "_IDENTITY_UNVERIFIABLE: legacy state has no payload fingerprint");
       boolean matches =
-          identity.equals("TRANSACTION") && businessFacts.value() != null
-              ? facts.equals(businessFacts.value())
-              : hash.equals(fingerprint.value());
+          previousFacts != null ? facts.equals(previousFacts) : hash.equals(previousHash);
       if (!matches)
         throw new IllegalStateException(
             identity
                 + "_IDENTITY_CONFLICT: existing_sha256="
-                + fingerprint.value()
+                + previousHash
                 + " incoming_sha256="
                 + hash);
       duplicate.inc();
       // An unchanged retry safely upgrades legacy checkpoint state; unknown facts fail closed.
-      if (identity.equals("TRANSACTION") && businessFacts.value() == null)
-        businessFacts.update(facts);
+      if (identity.equals("TRANSACTION") && previousFacts == null) businessFacts.update(facts);
       return;
     }
     seen.update(true);

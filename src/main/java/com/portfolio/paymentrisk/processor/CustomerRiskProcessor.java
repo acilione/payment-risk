@@ -32,12 +32,14 @@ public class CustomerRiskProcessor
   private transient PendingPayments queue;
   private transient StateExpiryIndex expiry;
   private transient Map<String, RiskEngine.PreparedPolicy> policyCache;
+  private transient JsonNode admissionRules;
 
   public CustomerRiskProcessor(AppConfig config) {
     this.config = config;
   }
 
   public void open(OpenContext c) {
+    admissionRules = null;
     policyCache =
         new LinkedHashMap<>(32, 0.75f, true) {
           protected boolean removeEldestEntry(Map.Entry<String, RiskEngine.PreparedPolicy> entry) {
@@ -98,7 +100,8 @@ public class CustomerRiskProcessor
   }
 
   private static int count(ValueState<Integer> s) throws Exception {
-    return s.value() == null ? 0 : s.value();
+    Integer value = s.value();
+    return value == null ? 0 : value;
   }
 
   private static void setCount(ValueState<Integer> s, int value) throws Exception {
@@ -136,6 +139,7 @@ public class CustomerRiskProcessor
       return;
     }
     state.put(id, value);
+    admissionRules = null;
     updates.inc();
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info("event=rule_update rule_id={} version={}", id, r.path("version").asLong());
@@ -147,7 +151,8 @@ public class CustomerRiskProcessor
     long t = tx.path("event_time").asLong(), watermark = ctx.timerService().currentWatermark();
     // Source watermarks restart from MIN_VALUE after recovery. Retained customer history
     // must never be revised behind its checkpointed evaluation frontier.
-    if (finalizedThrough.value() != null) watermark = Math.max(watermark, finalizedThrough.value());
+    Long cutoff = finalizedThrough.value();
+    if (cutoff != null) watermark = Math.max(watermark, cutoff);
     if (t <= watermark) {
       late.inc();
       ctx.output(
@@ -162,18 +167,23 @@ public class CustomerRiskProcessor
                   .put("reason", "TOO_LATE")));
       return;
     }
-    if (count(pendingCount) >= config.maxEvents())
+    int waiting = count(pendingCount);
+    if (waiting >= config.maxEvents())
       throw new IllegalStateException("Customer pending state limit exceeded");
     var item = Json.object();
     item.set("transaction", tx);
     item.put("queued_at", ctx.timerService().currentProcessingTime());
-    item.set("rules", Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES))));
+    // Immutable derived cache: rebuild from restored broadcast state after open, and
+    // invalidate on accepted updates. Every queued item still stores its own policy snapshot.
+    if (admissionRules == null)
+      admissionRules = Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES)));
+    item.set("rules", admissionRules);
     item.put("review_threshold", catalog == null ? config.review() : catalog.review());
     item.put("reject_threshold", catalog == null ? config.reject() : catalog.reject());
     item.put("policy_id", catalog == null ? "dynamic" : catalog.id());
     item.put("policy_version", catalog == null ? 0 : catalog.version());
     queue.add(t, item);
-    pendingCount.update(count(pendingCount) + 1);
+    pendingCount.update(waiting + 1);
     if (pendingSince.value() == null) {
       long now = ctx.timerService().currentProcessingTime();
       pendingSince.update(now);

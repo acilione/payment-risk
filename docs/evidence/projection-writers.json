@@ -1,0 +1,71 @@
+{
+  "scope": "Direct PostgreSQL acceptance, batches of 250, 999 customers with fixed partition affinity, three source partitions, shared topic; excludes Kafka/Flink",
+  "qualification": "Short shared-host concurrency experiment; fixed fixture-derived assessment payloads, not a capacity qualification",
+  "schema_sha256": "ade63ad43432c2714666acf5f84b3125d835f3d482ffd5e318441d637c150724",
+  "results": [
+    {
+      "writers": 1,
+      "rows": 9000,
+      "elapsed_ms": 13141.28834,
+      "rows_per_second": 684.8643578274914,
+      "batch_p50_ms": 343.5356320000001,
+      "batch_p95_ms": 456.04842699999995,
+      "lock_samples": 246,
+      "samples_with_blocked_writer": 0,
+      "max_blocked_writers": 0,
+      "reconciliation": {
+        "assessments": 9000,
+        "payments": 9000,
+        "incidents": 0
+      }
+    },
+    {
+      "writers": 3,
+      "rows": 9000,
+      "elapsed_ms": 12353.669184,
+      "rows_per_second": 728.528493514822,
+      "batch_p50_ms": 908.4093279999979,
+      "batch_p95_ms": 1777.4844780000021,
+      "lock_samples": 233,
+      "samples_with_blocked_writer": 211,
+      "max_blocked_writers": 2,
+      "reconciliation": {
+        "assessments": 9000,
+        "payments": 9000,
+        "incidents": 0
+      }
+    },
+    {
+      "writers": 3,
+      "rows": 9000,
+      "elapsed_ms": 11562.701507000002,
+      "rows_per_second": 778.3648133225133,
+      "batch_p50_ms": 950.224850999999,
+      "batch_p95_ms": 1321.5688310000041,
+      "lock_samples": 219,
+      "samples_with_blocked_writer": 211,
+      "max_blocked_writers": 2,
+      "reconciliation": {
+        "assessments": 9000,
+        "payments": 9000,
+        "incidents": 0
+      }
+    },
+    {
+      "writers": 1,
+      "rows": 9000,
+      "elapsed_ms": 11894.312409999999,
+      "rows_per_second": 756.6641676935742,
+      "batch_p50_ms": 315.21083299999736,
+      "batch_p95_ms": 470.50232700000197,
+      "lock_samples": 226,
+      "samples_with_blocked_writer": 0,
+      "max_blocked_writers": 0,
+      "reconciliation": {
+        "assessments": 9000,
+        "payments": 9000,
+        "incidents": 0
+      }
+    }
+  ]
+}

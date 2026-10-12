@@ -107,10 +107,6 @@ public final class ShowcaseProducer {
         finalEventTime = Math.max(finalEventTime, tx.path("event_time").asLong());
         var bytes = codec.encode(c.topic("payments.raw"), "transaction", Json.write(tx));
         for (int copy = 0; copy < (sample.retry() ? 2 : 1); copy++) {
-          int partition =
-              load
-                  ? Math.floorMod(tx.path("customer_id").asText().hashCode(), partitions.size())
-                  : 0;
           var row =
               Json.object()
                   .put("kind", "payment")
@@ -123,8 +119,7 @@ public final class ShowcaseProducer {
           if (load)
             row.put("scheduled_at", publishingStartedAt + unique * 1000L / generatorConfig.rate());
           publisher.send(
-              new ProducerRecord<>(
-                  c.topic("payments.raw"), partition, tx.path("customer_id").asText(), bytes),
+              paymentRecord(c.topic("payments.raw"), tx.path("customer_id").asText(), bytes, load),
               row);
           deliveries++;
         }
@@ -158,8 +153,7 @@ public final class ShowcaseProducer {
                 .put("payload_sha256", Audit.sha256(bytes)));
       }
       if (includeOutcomes) {
-        // A committed assessment proves finalization for this customer even while ClickHouse is
-        // down.
+        // A committed assessment proves finalization even while the databases are unavailable.
         awaitAssessment(c, codec, lastPayment.path("event_id").asText());
         var late =
             IntegrationScenario.transaction(
@@ -173,8 +167,8 @@ public final class ShowcaseProducer {
         var metadata =
             producer
                 .send(
-                    new ProducerRecord<>(
-                        c.topic("payments.raw"), 0, late.path("customer_id").asText(), bytes))
+                    paymentRecord(
+                        c.topic("payments.raw"), late.path("customer_id").asText(), bytes, load))
                 .get();
         var row =
             Json.object()
@@ -238,5 +232,12 @@ public final class ShowcaseProducer {
   private static void emit(Object row) {
     System.out.println(Json.write(row));
     System.out.flush();
+  }
+
+  public static ProducerRecord<String, byte[]> paymentRecord(
+      String topic, String customer, byte[] value, boolean live) {
+    // Live producers share Kafka's keyed partitioning. Historical fixtures alone pin
+    // partition zero so accelerated event time cannot overtake a paused source split.
+    return new ProducerRecord<>(topic, live ? null : Integer.valueOf(0), customer, value);
   }
 }

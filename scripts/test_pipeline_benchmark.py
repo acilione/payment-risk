@@ -12,6 +12,22 @@ spec.loader.exec_module(benchmark)
 
 
 class PipelineBenchmarkTest(unittest.TestCase):
+    def test_task_utilization_excludes_startup_drain_and_other_jobs(self):
+        samples = []
+        for second, busy in [(0, 1000), (10, 100), (20, 150), (30, 1000)]:
+            rows = [{"metric": {"__name__": "busy", "job_id": job}, "value": [second, str(value)]}
+                    for job, value in [("current", busy), ("old", 999)]]
+            samples.append({"observed_at": f"1970-01-01T00:00:{second:02d}+00:00", "metrics": rows})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "metrics.jsonl"
+            path.write_text("\n".join(json.dumps(sample) for sample in samples))
+            result = benchmark.summarize_metrics(path, "current", 10000, 20000)
+            self.assertEqual(len(result["series"]), 1)
+            series = next(iter(result["series"].values()))
+            self.assertEqual(series["samples"], 2)
+            self.assertEqual(series["mean"], 125)
+            self.assertEqual(series["max"], 150)
+
     def test_sustained_load_distinguishes_stability_backlog_and_driver_stalls(self):
         from load_analysis import sustained_summary
         with sqlite3.connect(":memory:") as db:

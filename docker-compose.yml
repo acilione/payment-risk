@@ -42,8 +42,8 @@ x-flink: &flink
     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Run python3 scripts/init-env.py}
     FLINK_PROPERTIES: |
       jobmanager.rpc.address: jobmanager
-      parallelism.default: 2
-      taskmanager.numberOfTaskSlots: 2
+      parallelism.default: ${FLINK_PARALLELISM:-2}
+      taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-2}
       jobmanager.memory.process.size: 1600m
       taskmanager.memory.process.size: 2048m
       state.backend.type: rocksdb

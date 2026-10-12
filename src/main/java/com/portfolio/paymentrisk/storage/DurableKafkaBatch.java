@@ -63,7 +63,13 @@ public final class DurableKafkaBatch {
   public void flush() throws IOException, InterruptedException {
     if (count == 0) return;
     for (var entry : rows.entrySet()) writer.insert(entry.getKey(), entry.getValue().toString());
-    commit.accept(Map.copyOf(offsets));
+    long commitStarted = clock.getAsLong();
+    try {
+      commit.accept(Map.copyOf(offsets));
+    } finally {
+      metrics.offsetCommitNanos.addAndGet(clock.getAsLong() - commitStarted);
+      metrics.offsetCommits.incrementAndGet();
+    }
     metrics.batchBytes.addAndGet(bytes);
     metrics.batchRows.addAndGet(count);
     metrics.batches.incrementAndGet();
