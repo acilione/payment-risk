@@ -35,6 +35,22 @@ public final class RiskEngine {
       int review,
       int reject,
       long processedAt) {
+    return evaluate(
+        tx,
+        rules,
+        review,
+        reject,
+        processedAt,
+        RiskFeatures.observe(tx, history, deviceLastSeen, rules));
+  }
+
+  public static ObjectNode evaluate(
+      JsonNode tx,
+      List<JsonNode> rules,
+      int review,
+      int reject,
+      long processedAt,
+      Map<String, RiskFeatures.Observation> observations) {
     var matched = new ArrayList<String>();
     var reasons = new ArrayList<String>();
     var evidence = Json.MAPPER.createArrayNode();
@@ -42,7 +58,6 @@ public final class RiskEngine {
     long time = tx.path("event_time").asLong();
     var ordered =
         rules.stream().sorted(Comparator.comparing(r -> r.path("rule_id").asText())).toList();
-    var observations = RiskFeatures.observe(tx, history, deviceLastSeen, ordered);
     for (var r : ordered) {
       long threshold = r.path("threshold").asLong();
       var observation = observations.get(r.path("rule_id").asText());

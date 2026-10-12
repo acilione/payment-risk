@@ -15,6 +15,53 @@ import org.junit.jupiter.api.Test;
 
 class BoundedIngestionTest {
   @Test
+  void rowAndAgeBoundsFlushOnlyCoveredOffsets() throws Exception {
+    var bodies = new ArrayList<String>();
+    var commits = new ArrayList<Map<TopicPartition, OffsetAndMetadata>>();
+    var clock = new java.util.concurrent.atomic.AtomicLong();
+    var server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          exchange.sendResponseHeaders(200, -1);
+          exchange.close();
+        });
+    server.start();
+    try (var metrics = new MaterializerMetrics(0)) {
+      var writer =
+          new ClickHouseWriter(
+              "http://localhost:" + server.getAddress().getPort(), "test", "test", metrics, 1);
+      var batch =
+          new DurableKafkaBatch(
+              writer,
+              offsets -> commits.add(Map.copyOf(offsets)),
+              metrics,
+              new BatchLimits(1024, 2, 10),
+              clock::get);
+      batch.add("risk.payment_ingress", "a", new ConsumerRecord<>("raw", 0, 0, null, new byte[0]));
+      clock.set(10_000_000);
+      batch.add("risk.payment_ingress", "b", new ConsumerRecord<>("raw", 0, 1, null, new byte[0]));
+      assertEquals(1, commits.size());
+      assertEquals(1, commits.get(0).get(new TopicPartition("raw", 0)).offset());
+      batch.add("risk.payment_ingress", "c", new ConsumerRecord<>("raw", 0, 2, null, new byte[0]));
+      assertEquals(2, commits.size());
+      assertTrue(bodies.get(1).endsWith("b\nc\n"));
+      batch.flush();
+      assertEquals(2, commits.size());
+      assertEquals(3, metrics.batchRows.get());
+      assertEquals(6, metrics.batchBytes.get());
+      assertEquals(2, metrics.batches.get());
+    } finally {
+      server.stop(0);
+    }
+    assertThrows(IllegalArgumentException.class, () -> new BatchLimits(0, 1, 1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> BatchLimits.from(Map.of("INGEST_BATCH_ROWS", "10001")));
+  }
+
+  @Test
   void byteChunksCommitOnlyTheirOwnOffsetsAndKeepOversizedRows() throws Exception {
     var bodies = new ArrayList<String>();
     var commits = new ArrayList<Map<TopicPartition, OffsetAndMetadata>>();

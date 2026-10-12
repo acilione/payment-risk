@@ -83,6 +83,22 @@ class StateLoadTest {
             .put(
                 "qualification",
                 "exploratory portfolio budgets declared in source before execution; not a production SLA");
+    report.put("generated_at", java.time.Instant.now().toString());
+    var hashes = Json.object();
+    for (String file :
+        List.of(
+            "processor/CustomerRiskProcessor.java",
+            "processor/RollingFeatures.java",
+            "processor/PendingPayments.java",
+            "processor/StateExpiryIndex.java",
+            "domain/RiskEngine.java",
+            "domain/RiskFeatures.java")) {
+      hashes.put(
+          file,
+          com.portfolio.paymentrisk.domain.Audit.sha256(
+              Files.readAllBytes(Path.of("src/main/java/com/portfolio/paymentrisk", file))));
+    }
+    report.set("source_sha256", hashes);
     report.set("profiles", results);
     Files.createDirectories(Path.of("artifacts"));
     Files.writeString(

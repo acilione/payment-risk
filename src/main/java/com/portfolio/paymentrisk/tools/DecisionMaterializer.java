@@ -16,6 +16,7 @@ public final class DecisionMaterializer {
 
   public static void main(String[] args) throws Exception {
     var c = AppConfig.fromEnv();
+    var limits = BatchLimits.from(System.getenv());
     var p =
         KafkaIngestion.properties(
             c,
@@ -42,8 +43,7 @@ public final class DecisionMaterializer {
         }
         if (records.isEmpty()) continue;
         var batch =
-            new DurableKafkaBatch(
-                writer, consumer::commitSync, metrics, DurableKafkaBatch.DEFAULT_BYTES);
+            new DurableKafkaBatch(writer, consumer::commitSync, metrics, limits, System::nanoTime);
         long decodeDeadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         for (var record : records) {
           if (System.nanoTime() > decodeDeadline)

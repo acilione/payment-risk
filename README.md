@@ -262,7 +262,7 @@ Both indexes expire after 24 hours of processing time by default. Reads do not e
 
 ### Event-time ordering and late payments
 
-[CustomerRiskProcessor.java](src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java) buffers accepted payments in `MapState<Long, String>` by event timestamp and registers an event-time timer for each bucket. When a timer fires, payments at that timestamp are sorted by `event_id`, evaluated, and added to history in that order.
+[CustomerRiskProcessor.java](src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java) stores each pending payment separately, links records by event timestamp, and registers an event-time timer for each timestamp. Appending a payment does not decode and rewrite an entire growing timestamp bucket. When a timer fires, payments at that timestamp are sorted by `event_id`, evaluated, and added to history in that order.
 
 Payment partitions allow ten seconds of out-of-order arrival and become idle after sixty seconds. The minimum watermark across active partitions controls finalization. A resumed partition can contain payments older than the watermark; those payments follow the late-event path.
 
@@ -308,19 +308,21 @@ With a catalog, the job ignores broadcast updates and preserves each pending pay
 
 ### Customer state and recovery
 
-The processor keeps three kinds of keyed state in embedded RocksDB:
+The processor keeps the following keyed state in embedded RocksDB:
 
 | State | Stored data | Default retention or limit |
 |---|---|---|
-| Pending payments | Timestamp buckets containing complete payments and their rule snapshots. | Until evaluation; at most 100,000 pending events per customer. |
+| Pending payments | Individual records containing complete payments, rule snapshots and a link to the preceding record at that timestamp. | Until evaluation; at most 100,000 pending events per customer. |
 | Payment history | Timestamp buckets containing event time, amount, currency, device, and status. | One hour of event time; at most 100,000 retained events per customer. |
 | Devices | Device ID to last evaluated event timestamp. | Thirty days of event time; at most 10,000 devices per customer. |
 
-Additional `ValueState` tracks counts, the next cleanup timer, and the last finalized timestamp. One cleanup timer per customer schedules the next history or device expiry. Cleanup uses the timer's logical time so a jumped watermark cannot remove history before older pending payments are evaluated. When all customer data expires, the finalized timestamp is also cleared. Exceeding a state limit fails the job instead of discarding history and computing an incomplete score.
+[RollingFeatures](src/main/java/com/portfolio/paymentrisk/processor/RollingFeatures.java) maintains exact counts, integer sums, decline counts and device reference counts once a customer has at least 64 retained payments. Smaller histories use the reference history calculation to avoid the extra state overhead. Once enabled, incremental state remains active until retained history and pending payments are empty. A changed rule type, currency or window rebuilds that rule's aggregate from retained history; ordinary evaluations do not scan that history. Disabled rules still retain their observations for audit evidence.
+
+[StateExpiryIndex](src/main/java/com/portfolio/paymentrisk/processor/StateExpiryIndex.java) looks up history and device expiry buckets directly. Feature expiration runs before history deletion. Repeated device use removes its previous expiry entry; a timer shared with pending work or another expiry is preserved. Cleanup uses the timer's logical time so a jumped watermark cannot remove history before older pending payments are evaluated. When all customer data expires, the finalized timestamp is also cleared. Exceeding a state limit fails the job instead of discarding history and computing an incomplete score.
 
 Compose configures incremental RocksDB checkpoints in MinIO every ten seconds. The Helm deployment uses S3 and a thirty-second interval. Flink restores managed state, timers, and source positions from checkpoints after failure. A non-draining savepoint preserves pending payments for an intentional stop and upgrade.
 
-State descriptors use explicit string, long, and integer serializers; JSON holds the payment and rule structures. Stable operator UIDs and maximum parallelism 128 identify the state during restore. Changing descriptor names, serializers, or JSON meaning requires a tested migration; a JSON string is still a state schema.
+State descriptors use explicit string, long, and integer serializers; JSON holds the payment and rule structures. Stable operator UIDs and maximum parallelism 128 identify the state during restore. Changing descriptor names, serializers, or JSON meaning requires a tested migration; a JSON string is still a state schema. The current operator can drain the previous pending-bucket format and builds its expiry index once per restored customer. Tests restore the previous state descriptors, combine old and new pending records at the same timestamp, and verify complete idle-state cleanup. New savepoints contain additional state; rolling back to an older binary needs its own tested migration.
 
 ### Transactional Kafka output
 
@@ -330,9 +332,9 @@ This coordinates Kafka source positions, Flink state, and Kafka output across re
 
 ### ClickHouse storage, uniqueness and retries
 
-[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to 250 committed output records per poll from the decision, DLQ, and late topics with auto-commit disabled. Assessments go to `risk.evaluations`; invalid and late evidence goes to `risk.processing_outcomes`. Malformed output records go to `risk.materializer_rejections` with source coordinates, error category, payload hash and length. Registry connection and authentication errors stop processing rather than marking decisions invalid.
+[DecisionMaterializer.java](src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java) consumes up to `INGEST_MAX_POLL_RECORDS` committed output records per poll (250 by default) from the decision, DLQ, and late topics with auto-commit disabled. Assessments go to `risk.evaluations`; invalid and late evidence goes to `risk.processing_outcomes`. Malformed output records go to `risk.materializer_rejections` with source coordinates, error category, payload hash and length. Registry connection and authentication errors stop processing rather than marking decisions invalid.
 
-[DurableKafkaBatch.java](src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java) buffers up to 1 MiB of UTF-8 JSON across tables. A larger row is written alone without truncation. Each chunk commits only its own Kafka offsets, after every synchronous insert succeeds. [ClickHouseWriter.java](src/main/java/com/portfolio/paymentrisk/tools/ClickHouseWriter.java) retries network failures, HTTP 429 and server errors up to five times with backoff and jitter. Other HTTP errors fail immediately. A failed chunk remains uncommitted and is retried after the consumer restarts.
+[DurableKafkaBatch.java](src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java) bounds UTF-8 JSON across tables by `INGEST_BATCH_BYTES` (1 MiB), `INGEST_BATCH_ROWS` (1,000) and `INGEST_BATCH_MS` (1,000 ms). Before adding a record it flushes a nonempty batch whose age or byte limit would be exceeded; reaching the row or byte limit also flushes it. Every poll ends with a flush, so low traffic never waits for a full batch. The age limit controls buffering, not database/network latency. The same settings apply to the independent raw-input archiver. Prometheus exposes committed batch bytes, rows and counts for tuning. A larger row is written alone without truncation. Each chunk commits only its own Kafka offsets, after every synchronous insert succeeds. [ClickHouseWriter.java](src/main/java/com/portfolio/paymentrisk/tools/ClickHouseWriter.java) retries network failures, HTTP 429 and server errors up to five times with backoff and jitter. Other HTTP errors fail immediately. A failed chunk remains uncommitted and is retried after the consumer restarts.
 
 Decision decoding and batch work have a sixty-second budget; HTTP requests time out after ten seconds and the Kafka poll interval is five minutes. Fetch targets are 4 MiB per broker request and 1 MiB per partition. Kafka may return a larger first record batch, so producer and broker message limits must also fit available memory.
 
@@ -920,6 +922,24 @@ With ClickHouse running and local credentials in `.env`, run `node --env-file=.e
 
 These are exploratory budgets defined before the experiments: 1,000 operator decisions/second for small histories, operation p99 below 20 ms for typical/active/high-cardinality profiles, and 50 ms for dense-key operations and same-timestamp finalization. The query budget is 2 seconds with no errors. These values guide the portfolio's next optimization; they are not an agreed production SLA. Three requests at concurrency 1 and twelve at concurrency 4 per stage provide a small diagnostic sample, not a reliable production p99 estimate.
 
+For a larger generated run through the complete pipeline, stop the current showcase and run:
+
+```bash
+make showcase-stop
+python3 scripts/benchmark-pipeline.py --config config/showcase-load.json
+```
+
+This configuration generates 10,000 business payments across 200 customers, plus retries and invalid/late inputs. The report records exact reconciliation, producer-to-first-database-write p50/p95/p99 latency, and sampled ingestion metrics under `artifacts/pipeline-load/`. Samples stream to disk; latency reconciliation reads pages of 200 records and computes quantiles in SQLite. Add `--database-outage` to include recovery and replay, or `--no-build` when the current images are already built. The existing showcase preserves chronological history on one input partition; these measurements are a reproducible functional load test, not a multi-partition bank-capacity result. Outage time and watermark/checkpoint waiting are included in the reported latency.
+
+The isolated SQL benchmark also accepts larger datasets and more repeated requests:
+
+```bash
+RISK_QUERY_STAGES=1000,10000,50000,100000 RISK_QUERY_CONCURRENCY=1,4,8 RISK_QUERY_ROUNDS=10 \
+  node --env-file=.env scripts/benchmark-investigation.mjs
+```
+
+It limits insert batches to 500 logical rows and checks that retries do not inflate totals. Stages must be increasing multiples of 1,000, up to one million. A request error fails the experiment and remains in its report.
+
 ### Build and release workflows
 
 [GitHub Actions](.github/workflows) runs Java formatting/tests, Compose and schema checks, integration/recovery scenarios, alert and dashboard-query checks, and Helm/Terraform validation. Maven CycloneDX creates a software bill of materials, and Trivy scans dependencies and images. The website workflow runs API tests, TypeScript compilation, formatting, npm audit, and Playwright checks before publishing the static build to GitHub Pages.
@@ -930,7 +950,7 @@ The tagged release workflow builds and scans an application image, runs integrat
 
 ### Customer-state load
 
-On 9 October 2026, three separate JVM runs exercised the current customer operator with embedded RocksDB on WSL2 (20 logical CPUs, Java 17, 4 GiB maximum JVM heap). Each run used a separate 300-event warmup, default rules, one processing subtask and a one-hour history. Source event times advance by 100 ms except in the same-timestamp profile. [Recorded results](docs/evidence/state-load-2026-10-09.json) include environment details, source hashes, checkpoint sizes, restore times and every run.
+On 9 October 2026, three separate JVM runs exercised the earlier history-scanning customer operator with embedded RocksDB on WSL2 (20 logical CPUs, Java 17, 4 GiB maximum JVM heap). Each run used a separate 300-event warmup, default rules, one processing subtask and a one-hour history. Source event times advance by 100 ms except in the same-timestamp profile. [Recorded results](docs/evidence/state-load-2026-10-09.json) include environment details, source hashes, checkpoint sizes, restore times and every run.
 
 | Workload | Payments / customers | Operator decisions/sec, observed range | Operation p99, observed range |
 |---|---:|---:|---:|
@@ -946,7 +966,21 @@ A separate GitHub Actions run on four vCPUs with Java 21 produced 975 decisions/
 
 The same-timestamp percentile needs particular care: most operations only admit a payment; the last one also finalizes the whole bucket. That finalization took **124–225 ms**, exceeding the declared 50 ms burst budget in all three runs. It accounted for only 2.7–3.5% of total burst processing time. The source code repeatedly decodes and rewrites the growing pending JSON bucket during admission, so changing the pending-state representation deserves investigation before optimizing only rule arithmetic.
 
-For ordinary customer histories, these results do not yet justify migrating to incremental aggregates. Dense keys show the expected scan cost, and one key still runs on one subtask. A workload requiring hundreds of payments per second for the same customer would need a separate capacity test and likely a different state representation. Any aggregate experiment must preserve exact `(t - window, t]` boundaries, same-timestamp ordering, policy snapshots, distinct-device counts and restore behavior. It must match full rule evidence, not just the final score.
+Those measurements did not justify incremental aggregates for every customer. The current implementation therefore activates them only for denser retained histories, and stores pending payments individually. Dense keys show the expected scan cost, and one key still runs on one subtask. A workload requiring hundreds of payments per second for the same customer would need a separate capacity test and likely a different state representation. Any aggregate experiment must preserve exact `(t - window, t]` boundaries, same-timestamp ordering, policy snapshots, distinct-device counts and restore behavior. It must match full rule evidence, not just the final score.
+
+### Incremental state and pending-buffer comparison
+
+On 12 October 2026, the previous commit and updated operator ran sequentially on the same host with 2 GiB JVM heaps. Each profile checked every score and rule observation, then checked the first decision after checkpoint restoration. [The comparison](docs/evidence/state-load-comparison-2026-10-12.json) records both runs and hashes of the updated implementation.
+
+| Workload | Previous decisions/sec | Updated decisions/sec | Previous / updated operation p99 |
+|---|---:|---:|---:|
+| typical | 1,284 | 1,131 | 2.55 / 2.63 ms |
+| active | 696 | 2,479 | 3.97 / 1.47 ms |
+| hot-key | 161 | 3,268 | 14.09 / 0.81 ms |
+| high-cardinality | 2,280 | 1,158 | 1.12 / 5.62 ms |
+| same-timestamp | 156 | 6,549 | 13.98 / 0.15 ms |
+
+The dense-history and same-timestamp workloads improve substantially. The extra indexed state also has a cost for high-cardinality workloads; use the recorded figures rather than assuming every workload improves. These are single-run diagnostics with uncontrolled host caches, not a statistically controlled capacity study. Same-timestamp finalization still exceeds the 50 ms exploratory budget even though admission no longer rewrites a growing JSON array. A large timestamp group is still sorted and evaluated in one callback, bounded by the per-customer pending limit.
 
 ### Analytical query load
 
@@ -983,9 +1017,11 @@ Recent scoring state, retained payment history and investigative workflows have 
 | Proposal | Current decision |
 |---|---|
 | Customer investigation | Implemented using existing decision evidence, bounded ClickHouse reads and the synthetic customer stories. |
-| Incremental Flink features | Deferred for ordinary histories. Measure denser keys and pending-bucket costs before choosing an exact aggregate representation or a state migration. |
+| Incremental Flink features | Enabled from 64 retained payments per customer, with exact device reference counts, window expiry and policy-change rebuilds. Small histories keep the simpler calculation. |
 | Redis | No current requirement for external feature serving; moving the same history across a network would not remove its scan cost. |
 | Analyst case management | Deferred until ownership, authentication, editable states and an audit workflow are defined. ClickHouse remains the analytical store. |
 | Accounts, transfers and relationship graphs | A separate domain extension. Model account roles and transfer endpoints first; merchant IDs are not bank counterparties. Start with concrete SQL queries before considering Neo4j. |
 
 Precomputed database totals also need a replay-safe design. A naive sum over incoming delivery rows counts retries. ClickHouse incremental materialized views operate on inserted blocks, so they are not automatically a globally deduplicated projection; see the [ClickHouse materialized-view documentation](https://github.com/ClickHouse/clickhouse-docs/blob/main/docs/materialized-view/incremental-materialized-view.md). Any replacement must preserve evaluation identity and expose later conflicts, with a verified backfill and reconciliation procedure.
+
+The changes above address customer-state work and bounded ingestion. The larger deployment still has three unimplemented requirements: a durable incremental integrity registry checked against the existing SQL, versioned analytical snapshots with a verified rebuild boundary, and a replicated storage/archive deployment tested under sustained multi-partition traffic. None is implied by the operator measurements. Keep the exact SQL checks and existing retention until those replacements demonstrate complete coverage and conflict handling. A TTL cache cannot establish permanent transaction uniqueness, and adding sums to delivery rows would count retries.

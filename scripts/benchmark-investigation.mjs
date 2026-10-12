@@ -12,6 +12,36 @@ const config = {
   flink: "http://127.0.0.1:28082",
   prometheus: "http://127.0.0.1:29090",
 };
+// Dataset size and concurrency are explicit; insertion remains bounded to 500 logical rows.
+const stages = (process.env.RISK_QUERY_STAGES || "1000,10000,50000")
+  .split(",")
+  .map(Number);
+const concurrencies = (process.env.RISK_QUERY_CONCURRENCY || "1,4")
+  .split(",")
+  .map(Number);
+const rounds = Number(process.env.RISK_QUERY_ROUNDS || "3");
+if (
+  !stages.length ||
+  stages.some(
+    (n, i) =>
+      !Number.isSafeInteger(n) ||
+      n < 1000 ||
+      n > 1000000 ||
+      n % 1000 ||
+      (i && n <= stages[i - 1]),
+  )
+)
+  throw new Error(
+    "RISK_QUERY_STAGES must be increasing multiples of 1000, at most 1000000",
+  );
+if (
+  !concurrencies.length ||
+  concurrencies.some((n) => !Number.isInteger(n) || n < 1 || n > 32) ||
+  !Number.isInteger(rounds) ||
+  rounds < 1 ||
+  rounds > 100
+)
+  throw new Error("Query concurrency must be 1-32 and rounds 1-100");
 const database = "risk_benchmark_" + randomUUID().replaceAll("-", "");
 const samples = JSON.parse(
   await readFile(
@@ -69,6 +99,13 @@ const report = {
     "Exact production SQL in an isolated synthetic database; health probes stubbed; excludes Kafka and HTTP server routing",
   budgets: { requestP95Ms: 2000, errors: 0 },
   queryErrors,
+  workload: {
+    stages,
+    concurrencies,
+    rounds,
+    customers: 1000,
+    retryPercent: 10,
+  },
   stages: [],
 };
 report.sourceDirty = Boolean(
@@ -111,7 +148,7 @@ try {
     await sql(statement.replaceAll("risk.", database + "."));
   }
   let inserted = 0;
-  for (const count of [1000, 10000, 50000]) {
+  for (const count of stages) {
     while (inserted < count) {
       const rows = [];
       for (let i = inserted; i < Math.min(inserted + 500, count); i++) {
@@ -154,10 +191,10 @@ try {
       ["timeline", () => reader.timeline({ customer: "customer_0000" })],
       ["overview", () => overview("24h")],
     ]) {
-      for (const concurrency of [1, 4]) {
+      for (const concurrency of concurrencies) {
         const durations = [];
         let errors = 0;
-        for (let round = 0; round < 3; round++)
+        for (let round = 0; round < rounds; round++)
           await Promise.all(
             Array.from({ length: concurrency }, async () => {
               const start = performance.now();
@@ -201,7 +238,7 @@ try {
         stage.measurements.push({
           operation,
           concurrency,
-          attempts: concurrency * 3,
+          attempts: concurrency * rounds,
           samples: durations.length,
           p50Ms: durations.length ? percentile(durations, 0.5) : null,
           p95Ms: durations.length ? percentile(durations, 0.95) : null,
@@ -248,11 +285,12 @@ try {
     }
     cursor = page.nextCursor;
   } while (cursor);
-  if (ids.size !== 50) throw new Error("Timeline pagination gap");
+  if (ids.size !== stages.at(-1) / 1000)
+    throw new Error("Timeline pagination gap");
   report.stages
     .at(-1)
     .checks.push(
-      "50 customer payments across 3 timeline pages; physical retries counted once",
+      `${ids.size} customer payments paginated; physical retries counted once`,
     );
   if (
     report.stages.some((stage) =>

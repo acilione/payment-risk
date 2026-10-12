@@ -21,7 +21,11 @@ public final class KafkaIngestion {
     p.put("isolation.level", "read_committed");
     // Fail on expired committed offsets; never silently skip an unarchived retention gap.
     p.put("auto.offset.reset", "none");
-    p.put("max.poll.records", "250");
+    int pollRecords =
+        Integer.parseInt(System.getenv().getOrDefault("INGEST_MAX_POLL_RECORDS", "250"));
+    if (pollRecords < 1 || pollRecords > 10000)
+      throw new IllegalArgumentException("Invalid poll record limit");
+    p.put("max.poll.records", Integer.toString(pollRecords));
     p.put("fetch.max.bytes", "4194304");
     p.put("max.partition.fetch.bytes", "1048576");
     p.put("max.poll.interval.ms", "300000");

@@ -12,6 +12,7 @@ public final class PaymentArchiver {
 
   public static void main(String[] args) throws Exception {
     var config = AppConfig.fromEnv();
+    var limits = BatchLimits.from(System.getenv());
     var properties =
         KafkaIngestion.properties(
             config,
@@ -34,8 +35,7 @@ public final class PaymentArchiver {
           lastProbe = System.currentTimeMillis();
         }
         var batch =
-            new DurableKafkaBatch(
-                writer, consumer::commitSync, metrics, DurableKafkaBatch.DEFAULT_BYTES);
+            new DurableKafkaBatch(writer, consumer::commitSync, metrics, limits, System::nanoTime);
         long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
         for (var record : records) {
           if (System.nanoTime() > deadline)

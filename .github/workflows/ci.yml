@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with: {distribution: temurin, java-version: '21', cache: maven}
       - run: mvn -B spotless:check verify cyclonedx:makeAggregateBom
-      - run: python3 -m unittest discover -s scripts -p test_showcase.py
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: mvn -B -Dtest=StateLoadTest -Drisk.load=true test
       - run: python3 scripts/init-env.py && docker compose config --quiet
       - run: pip install PyYAML==6.0.3 jsonschema==4.26.0

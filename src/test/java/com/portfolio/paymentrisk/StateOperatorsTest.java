@@ -41,6 +41,51 @@ class StateOperatorsTest {
   }
 
   @Test
+  void rollingFeaturesMatchHistoryAcrossWindowChangesAndExpiryBoundaries() throws Exception {
+    var history = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+    var seen = new HashMap<String, Long>();
+    var rules = new ArrayList<com.fasterxml.jackson.databind.JsonNode>(Rules.defaults());
+    var random = new Random(42);
+    long time = 100_000;
+    try (var h = harness()) {
+      for (int i = 0; i < 600; i++) {
+        if (i % 75 == 0) {
+          int slot = (i / 75) % 5;
+          var rule = ((ObjectNode) rules.get(slot)).deepCopy();
+          rule.put("version", i + 2).put("window_seconds", 120 + (i % 3) * 300);
+          rule.put("enabled", i % 150 == 0);
+          if (slot == 0 && i > 0) rule.put("type", "UNIQUE_DEVICES");
+          rules.set(slot, rule);
+          h.processBroadcastElement(Json.write(rule), 0);
+        }
+        // Frequent exact boundaries as well as long gaps exercise expiration before evaluation.
+        time += i % 151 == 0 ? 120_000 : 1 + random.nextInt(1_000);
+        var tx =
+            RiskEngineTest.tx(
+                "diff-" + i,
+                time,
+                random.nextInt(100_000),
+                "device-" + random.nextInt(12),
+                i % 3 == 0 ? "DECLINED" : "APPROVED");
+        String device = tx.path("device_id").asText();
+        var expected =
+            com.portfolio.paymentrisk.domain.RiskEngine.evaluate(
+                tx, history, seen.get(device), rules, 30, 70, 0);
+        h.processElement(Json.write(tx), time);
+        h.processWatermark(time);
+        var actual = Json.read(h.extractOutputValues().get(i));
+        assertEquals(expected.path("risk_score"), actual.path("risk_score"), "score at " + i);
+        assertEquals(
+            expected.path("rule_evidence").toString(),
+            actual.path("rule_evidence").toString(),
+            "evidence at " + i);
+        history.add(tx);
+        seen.put(device, time);
+      }
+    }
+  }
+
+  @Test
   void sortsOutOfOrderRoutesLateAndExpiresHistory() throws Exception {
     try (var h = harness()) {
       h.processElement(tx("later", 100_100), 100_100);
@@ -72,7 +117,7 @@ class StateOperatorsTest {
           .processWatermarkStatus1(
               org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.IDLE);
       assertEquals(1, h.extractOutputValues().size(), "Idleness must not finalize a pending tail");
-      assertEquals(2, h.numEventTimeTimers(), "Pending evaluation and cleanup remain registered");
+      assertTrue(h.numEventTimeTimers() >= 2, "Pending evaluation and expiry remain registered");
       h.getTwoInputOperator()
           .processWatermarkStatus1(
               org.apache.flink.streaming.runtime.watermarkstatus.WatermarkStatus.ACTIVE);
@@ -168,11 +213,15 @@ class StateOperatorsTest {
   }
 
   @Test
-  void cleanupTimerIsCoalescedAndAllIdleCustomerStateIsRemoved() throws Exception {
+  void expiryTimersStayBoundedAndAllIdleCustomerStateIsRemoved() throws Exception {
     try (var h = harness()) {
       for (int i = 0; i < 100; i++) h.processElement(tx("e" + i, 100_000 + i), 100_000 + i);
       h.processWatermark(100_100);
-      assertEquals(1, h.numEventTimeTimers(), "Only next cleanup is retained after evaluation");
+      assertTrue(
+          h.numEventTimeTimers() <= 401,
+          "Three distinct rule windows, history and one active device expiry");
+      h.processWatermark(4_000_000);
+      assertEquals(1, h.numEventTimeTimers(), "Repeated device use retains only its latest expiry");
       h.processWatermark(3_000_000_000L);
       assertEquals(0, h.numEventTimeTimers());
       var backend =
