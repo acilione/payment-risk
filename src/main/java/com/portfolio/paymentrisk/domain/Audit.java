@@ -53,6 +53,12 @@ public final class Audit {
     return sha256(canonical(facts));
   }
 
+  public static String transactionFacts(JsonNode transaction) {
+    var facts = (com.fasterxml.jackson.databind.node.ObjectNode) transaction.deepCopy();
+    facts.remove(List.of("producer_time", "event_id"));
+    return canonical(facts);
+  }
+
   public static void attachPolicy(
       com.fasterxml.jackson.databind.node.ObjectNode result,
       JsonNode transaction,
@@ -60,6 +66,8 @@ public final class Audit {
       long version) {
     result.put("policy_id", id).put("policy_version", version);
     result.put("input_sha256", inputHash(transaction));
+    result.put("transaction_facts", transactionFacts(transaction));
+    result.put("assessment_request_id", "initial");
     result.put(
         "evaluation_id",
         evaluationId(transaction.path("event_id").asText(), ENGINE_VERSION, id, version));

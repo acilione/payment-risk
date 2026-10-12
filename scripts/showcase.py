@@ -4,10 +4,12 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 import uuid
 from datetime import datetime, timezone
@@ -52,7 +54,7 @@ def compose_environment():
         key, value = line.split("=", 1)
         env[key] = value
     credentials = settings()
-    for key in ("CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "REGISTRY_DB_PASSWORD", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "GRAFANA_ADMIN_PASSWORD"):
+    for key in ("CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "REGISTRY_DB_PASSWORD", "RISK_DB_PASSWORD", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "GRAFANA_ADMIN_PASSWORD"):
         if key in credentials:
             env[key] = credentials[key]
     return env
@@ -69,12 +71,33 @@ def settings():
     return values
 
 def sql(query, **parameters):
+    if any(name in query for name in ("risk.assessments", "risk.topic_totals", "risk.projection_status", "risk.incidents", "risk.outcomes")):
+        values = []
+        def bind(match):
+            values.append(parameters[match[1]])
+            return "$" + str(len(values))
+        query = re.sub(r"\{([a-z_]+):[A-Za-z0-9]+\}", bind, query)
+        try:
+            result = compose("exec", "-T", "website", "node", "server/postgres-query.mjs",
+                             input=json.dumps({"query": query, "parameters": values}), capture_output=True, text=True)
+        except subprocess.CalledProcessError as error:
+            if error.returncode == 75:
+                raise OSError("PostgreSQL unavailable") from error
+            raise RuntimeError("PostgreSQL verification query failed; inspect the query and database logs") from error
+        return json.loads(result.stdout)
     env = settings()
     url = "http://127.0.0.1:28123/?" + urllib.parse.urlencode({"param_" + k: v for k, v in parameters.items()})
     request = urllib.request.Request(url, data=(query + " SETTINGS readonly=1, max_execution_time=20, max_memory_usage=268435456 FORMAT JSON").encode(),
         headers={"X-ClickHouse-User": env.get("CLICKHOUSE_USER", "risk"), "X-ClickHouse-Key": env["CLICKHOUSE_PASSWORD"]})
-    with urllib.request.urlopen(request, timeout=25) as response:
-        return json.load(response)["data"]
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            return json.load(response)["data"]
+    except urllib.error.HTTPError as error:
+        if error.code in (429, 502, 503, 504):
+            raise
+        code = re.search(r"\bCode:\s*(\d+)", error.read(4096).decode(errors="replace"))
+        # Report an execution failure separately from a database outage; never log SQL or data.
+        raise RuntimeError(f"ClickHouse query failed: HTTP {error.code}, database code {code[1] if code else 'unknown'}") from error
 
 def ledger(path):
     db = sqlite3.connect(path)
@@ -92,6 +115,7 @@ def ledger(path):
     if "late" not in {row[1] for row in db.execute("PRAGMA table_info(payments)")}:
         db.execute("ALTER TABLE payments ADD COLUMN late TEXT")
     db.execute("CREATE TABLE IF NOT EXISTS acknowledgements (partition INTEGER, offset INTEGER, observed_at INTEGER, PRIMARY KEY(partition,offset))")
+    db.execute("CREATE TABLE IF NOT EXISTS offered_schedule (id TEXT PRIMARY KEY, scheduled_at INTEGER NOT NULL)")
     return db
 
 def record(db, row):
@@ -105,6 +129,8 @@ def record(db, row):
         facts = {k: v for k, v in payment.items() if k != "producer_time"}
         digest = hashlib.sha256(json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         db.execute("INSERT INTO payments(id,customer,hash,payload,decision) VALUES(?,?,?,?,NULL)", (payment["event_id"], payment["customer_id"], digest, json.dumps(payment)))
+        if "scheduled_at" in row:
+            db.execute("INSERT INTO offered_schedule VALUES (?,?)", (payment["event_id"], row["scheduled_at"]))
 
 
 def reconcile(db, report, require_complete=True):
@@ -131,14 +157,16 @@ def reconcile(db, report, require_complete=True):
             archived += 1
     if require_complete and archived != db.execute("SELECT count(*) FROM inputs").fetchone()[0]:
         raise AssertionError("Acknowledged input missing from archive")
+    verify_publication(report)
     after, evaluation, decisions = "", "", 0
     while True:
-        rows = sql("""SELECT * FROM risk.decisions_current WHERE source_topic = {topic:String}
-            AND startsWith(event_id, {prefix:String}) AND (event_id, evaluation_id) > ({after:String}, {evaluation:String}) ORDER BY event_id, evaluation_id LIMIT 200""",
-            topic=report["decision_topic"], prefix=report["run_id"] + "-payment-", after=after, evaluation=evaluation)
+        rows = sql("""SELECT payload FROM risk.assessments WHERE source_topic = {topic:String}
+            AND event_id COLLATE "C" > {after:String} AND starts_with(event_id,{prefix:String}) ORDER BY event_id COLLATE "C" LIMIT 200""",
+            topic=report["decision_topic"], prefix=report["run_id"] + "-payment-", after=after)
         if not rows:
             break
-        for row in rows:
+        for stored in rows:
+            row = stored["payload"]
             after, evaluation = row["event_id"], row["evaluation_id"]
             row = dict(row)
             expected = db.execute("SELECT hash, decision FROM payments WHERE id=?", (after,)).fetchone()
@@ -151,6 +179,7 @@ def reconcile(db, report, require_complete=True):
             db.execute("UPDATE payments SET decision=? WHERE id=?", (json.dumps(row), after))
             decisions += 1
     outcomes = reconcile_outcomes(db, report, sql)
+    verify_publication(report)
     db.commit()
     report["reconciliation"] = {
         "checked_at": now(), "verified": True,
@@ -190,13 +219,11 @@ def assert_offsets_unchanged(before, during):
 
 
 def progress(report):
-    counts = sql("""SELECT
-        (SELECT uniqExact(tuple(source_partition, source_offset)) FROM risk.payment_ingress WHERE source_topic={raw:String}) AS archived,
-        (SELECT count() FROM risk.decisions_current WHERE source_topic={decisions:String} AND startsWith(event_id,{prefix:String})) AS decisions,
-        (SELECT count() FROM risk.integrity_conflicts) + (SELECT count() FROM risk.materializer_rejections FINAL) AS conflicts""",
-        raw=report["input_topic"], decisions=report["decision_topic"], prefix=report["run_id"] + "-payment-")[0]
+    counts = sql("""SELECT coalesce((SELECT assessments FROM risk.topic_totals WHERE source_topic={decisions:String}),0) AS decisions,
+        EXISTS(SELECT 1 FROM risk.incidents WHERE NOT resolved)::integer AS conflicts""", decisions=report["decision_topic"])[0]
+    counts["archived"] = sql("SELECT uniqExact(tuple(source_partition,source_offset)) AS n FROM risk.payment_ingress WHERE source_topic={raw:String}", raw=report["input_topic"])[0]["n"]
     if int(counts["conflicts"]):
-        raise AssertionError("ClickHouse reports an integrity conflict or quarantined decision")
+        raise AssertionError("ClickHouse reports quarantined output")
     report["archived_records"] = int(counts["archived"])
     report["stored_decisions"] = int(counts["decisions"])
     report["reconciliation"] = {
@@ -208,10 +235,21 @@ def progress(report):
     }
 
 
+def publish_verification(report):
+    # Compatibility entry point: reads current health; does not rebuild or copy history.
+    verify_publication(report)
+    report["verification_store"] = "PostgreSQL"
+
+
+def verify_publication(report):
+    rows = sql("SELECT ready, EXISTS(SELECT 1 FROM risk.incidents WHERE NOT resolved) AS blocked FROM risk.projection_status WHERE id")
+    if len(rows) != 1 or not rows[0]["ready"] or rows[0]["blocked"]:
+        raise AssertionError("Verification projection is incomplete or blocked")
+
+
 def complete_report(report, run_dir):
-    report["decision_counts"] = {row["decision"]: int(row["n"]) for row in sql(
-        "SELECT decision, count() AS n FROM risk.decisions_current WHERE source_topic={topic:String} AND startsWith(event_id,{prefix:String}) GROUP BY decision",
-        topic=report["decision_topic"], prefix=report["run_id"] + "-payment-")}
+    with sqlite3.connect(run_dir / "ledger.sqlite") as db:
+        report["decision_counts"] = dict(db.execute("SELECT json_extract(decision,'$.decision'),count(*) FROM payments WHERE decision IS NOT NULL GROUP BY json_extract(decision,'$.decision')"))
     digest = hashlib.sha256()
     with (run_dir / "inputs.jsonl").open("rb") as source:
         for block in iter(lambda: source.read(65536), b""):
@@ -270,6 +308,8 @@ def run(args):
     run_dir.mkdir()
     (run_dir / "config.json").write_bytes(config.read_bytes())
     env = {"TRANSACTIONAL_PREFIX": run_id, "KAFKA_GROUP": run_id, "ARCHIVER_GROUP": run_id + "-archive", "MATERIALIZER_GROUP": run_id + "-materializer"}
+    env.update(FLINK_CHECKPOINT_INTERVAL_MS=str(args.checkpoint_interval_ms),
+               FLINK_CHECKPOINT_MIN_PAUSE_MS=str(args.checkpoint_min_pause_ms))
     for key, suffix in [("PAYMENTS", "payments"), ("RULES", "rules"), ("DECISIONS", "decisions"), ("DLQ", "dlq"), ("LATE", "late")]:
         env[key + "_TOPIC"] = run_id + "." + suffix
     (WORK / "compose.env").write_text("".join(k + "=" + v + "\n" for k, v in env.items()))
@@ -278,7 +318,8 @@ def run(args):
     subprocess.run(["docker", "run", "--rm", "--entrypoint", "java", "-v", str(config) + ":/config.json:ro",
                     "payment-risk:0.1.0", "-cp", JAR, CLASS, "/config.json", "--validate"], check=True)
     report = {"run_id": run_id, "status": "STARTING", "started_at": now(), "config": json.loads(config.read_text()),
-              "source": "Kafka / Flink / ClickHouse", "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+              "checkpoint_interval_ms": args.checkpoint_interval_ms, "checkpoint_min_pause_ms": args.checkpoint_min_pause_ms,
+              "source": "Kafka / Flink / PostgreSQL", "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=ROOT, text=True).strip())}
     def publish():
         report["updated_at"] = now()
@@ -297,14 +338,23 @@ def run(args):
             report["recovery"] = {"stage": "DATABASE_UNAVAILABLE", "started_at": now()}
             publish()
             database_stopped = True
-            compose("stop", "clickhouse")
+            compose("stop", "clickhouse", "risk-db")
             report["recovery"]["offsets_before"] = consumer_offsets()
             publish()
         report["status"] = "GENERATING"
         publish()
-        compose("cp", str(run_dir / "config.json"), "jobmanager:/tmp/showcase-config.json")
+        producer_options = [*(["--include-outcomes"] if args.include_outcomes else []), *(["--load"] if args.load else [])]
+        if args.load:
+            # A separate resource-limited container avoids competing with the JobManager JVM.
+            producer_command = [*compose_args(), "run", "--rm", "--no-deps", "-T", "-v",
+                                str(run_dir / "config.json") + ":/config.json:ro", "load-generator",
+                                "/config.json", run_id, *producer_options]
+        else:
+            compose("cp", str(run_dir / "config.json"), "jobmanager:/tmp/showcase-config.json")
+            producer_command = [*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS,
+                                "/tmp/showcase-config.json", run_id, *producer_options]
         with ledger(run_dir / "ledger.sqlite") as db, (run_dir / "inputs.jsonl").open("w") as output, (run_dir / "producer.log").open("w") as errors:
-            process = subprocess.Popen([*compose_args(), "exec", "-T", "jobmanager", "java", "-cp", JAR, CLASS, "/tmp/showcase-config.json", run_id, *(["--include-outcomes"] if args.include_outcomes else []), *(["--load"] if args.load else [])],
+            process = subprocess.Popen(producer_command,
                                        cwd=ROOT, env=compose_environment(), stdout=subprocess.PIPE, stderr=errors, text=True)
             last_progress = time.monotonic()
             try:
@@ -320,16 +370,16 @@ def run(args):
                         report["acknowledged_deliveries"] = report.get("acknowledged_deliveries", 0) + 1
                         counter = "transport_retries" if row["retry"] else "acknowledged_payments"
                         report[counter] = report.get(counter, 0) + 1
-                        if time.monotonic() - last_progress >= 1:
+                        if time.monotonic() - last_progress >= 10:
                             db.commit()
-                            if not database_stopped and "input_topic" in report:
+                            if not args.load and not database_stopped and "input_topic" in report:
                                 try:
                                     progress(report)
                                 except OSError:
                                     report["storage_unavailable"] = True
                             publish()
                             last_progress = time.monotonic()
-                    if row["kind"] in ("start", "complete"):
+                    if row["kind"] in ("start", "publishing", "complete"):
                         report.update({k: v for k, v in row.items() if k != "kind"})
                         publish()
                 if process.wait() != 0:
@@ -356,7 +406,7 @@ def run(args):
                     time.sleep(1)
                 report["recovery"].update(stage="RECOVERING", resume_in_seconds=0, resumed_at=now())
                 publish()
-                compose("up", "-d", "--no-deps", "clickhouse")
+                compose("up", "-d", "--no-deps", "clickhouse", "risk-db")
                 database_stopped = False
             report["status"] = "VERIFYING"
             publish()
@@ -374,11 +424,13 @@ def run(args):
                     continue
                 publish()
                 if report["archived_records"] >= report["acknowledged_deliveries"] + report["control_records"]:
+                    publish_verification(report)
                     report["archived_records"], report["stored_decisions"] = reconcile(db, report, require_complete=False)
                     publish()
                     if not report["reconciliation"]["unresolved_inputs"]:
                         break
                 if time.monotonic() > deadline:
+                    publish_verification(report)
                     reconcile(db, report, require_complete=False)
                     publish()
                     raise TimeoutError("Storage reconciliation timed out; inputs and logs are retained")
@@ -395,10 +447,10 @@ def run(args):
                 replay_report = json.loads(next(line for line in reversed(replay.stdout.splitlines()) if line.startswith("{")))
                 if replay_report["status"] != "COMPLETE" or replay_report["rejected"]:
                     raise AssertionError("Decision replay did not complete cleanly")
+                publish_verification(report)
                 report["archived_records"], report["stored_decisions"] = reconcile(db, report)
                 report["recovery"].update(stage="COMPLETE", completed_at=now(), replay=replay_report,
                     offsets_after=consumer_offsets(), verification="Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment.")
-            compose("exec", "-T", "website", "node", "server/publication-worker.mjs", "--once")
             complete_report(report, run_dir)
             publish()
             export_snapshot(report, db, run_dir / "snapshot.json")
@@ -410,7 +462,7 @@ def run(args):
         raise
     finally:
         if database_stopped:
-            compose("up", "-d", "--no-deps", "clickhouse")
+            compose("up", "-d", "--no-deps", "clickhouse", "risk-db")
 
 
 def main():
@@ -420,11 +472,15 @@ def main():
     parser.add_argument("--no-build", action="store_true", help="Use images already built from this checkout")
     parser.add_argument("--include-outcomes", action="store_true", help="Include an invalid record and a payment arriving after proven finalization")
     parser.add_argument("--load", action="store_true", help="Bounded asynchronous publication across partitions using live event times")
+    parser.add_argument("--checkpoint-interval-ms", type=int, default=10000)
+    parser.add_argument("--checkpoint-min-pause-ms", type=int, default=2000)
     parser.add_argument("--database-outage", action="store_true", help="Stop the showcase database during generation, recover it and replay decisions")
     parser.add_argument("--outage-hold-seconds", type=int, default=20, help="Keep the observed backlog visible before recovery (0-60 seconds)")
     args = parser.parse_args()
     if not 0 <= args.outage_hold_seconds <= 60:
         parser.error("--outage-hold-seconds must be between 0 and 60")
+    if not 1000 <= args.checkpoint_interval_ms <= 60000 or not 0 <= args.checkpoint_min_pause_ms <= args.checkpoint_interval_ms:
+        parser.error("Checkpoint interval must be 1000-60000 ms and minimum pause between zero and the interval")
     if args.action == "run":
         run(args)
     elif args.action == "stop":
@@ -455,6 +511,7 @@ def main():
                         db.execute("UPDATE inputs SET kind=?,event_id=? WHERE partition=? AND offset=? AND hash=?",
                                    (row["kind"], row.get("payment", {}).get("event_id", ""), row["source_partition"], row["source_offset"], row["payload_sha256"]))
             progress(report)
+            publish_verification(report)
             report["archived_records"], report["stored_decisions"] = reconcile(db, report, require_complete=False)
             check = report["reconciliation"]
             complete = not check["missing_archive"] and not check["unresolved_inputs"] and check["evaluated"] + check["late_payments"] + check["invalid_payments"] == report["expected_payments"]

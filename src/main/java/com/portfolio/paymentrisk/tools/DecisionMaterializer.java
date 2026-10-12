@@ -27,8 +27,8 @@ public final class DecisionMaterializer {
             new MaterializerMetrics(
                 Integer.parseInt(
                     System.getenv().getOrDefault("MATERIALIZER_METRICS_PORT", "9405")));
-        var consumer = new KafkaConsumer<String, byte[]>(p)) {
-      var writer = KafkaIngestion.writer(c, metrics);
+        var consumer = new KafkaConsumer<String, byte[]>(p);
+        var writer = new PostgresWriter(System.getenv(), metrics)) {
       KafkaIngestion.subscribe(
           consumer,
           List.of(c.topic("risk.decisions"), c.topic("payments.dlq"), c.topic("payments.late")),

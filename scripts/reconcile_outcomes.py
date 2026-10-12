@@ -8,11 +8,12 @@ def reconcile_outcomes(db, report, sql):
     invalid_examples, late_examples = [], []
     partition, offset = -1, -1
     while True:
-        rows = sql("""SELECT input_partition, input_offset, any(payload_sha256) AS hash, any(reason) AS reason_value,
-            uniqExact(tuple(payload_sha256,reason)) AS variants
-            FROM risk.processing_outcomes WHERE source_topic={topic:String} AND outcome='INVALID'
-            AND input_topic={input:String} AND (input_partition,input_offset)>({partition:Int64},{offset:Int64})
-            GROUP BY input_partition,input_offset ORDER BY input_partition,input_offset LIMIT 200""",
+        rows = sql("""SELECT (payload->>'input_partition')::int AS input_partition,(payload->>'input_offset')::bigint AS input_offset,
+            min(payload->>'payload_sha256') AS hash,min(payload->>'reason') AS reason_value,
+            count(DISTINCT (payload->>'payload_sha256',payload->>'reason')) AS variants
+            FROM risk.outcomes WHERE source_topic={topic:String} AND payload->>'outcome'='INVALID'
+            AND payload->>'input_topic'={input:String} AND ((payload->>'input_partition')::int,(payload->>'input_offset')::bigint)>({partition:Int64},{offset:Int64})
+            GROUP BY 1,2 ORDER BY 1,2 LIMIT 200""",
             topic=report.get("dlq_topic", report["run_id"] + ".dlq"), input=report["input_topic"], partition=partition, offset=offset)
         if not rows:
             break
@@ -26,12 +27,12 @@ def reconcile_outcomes(db, report, sql):
                 invalid_examples.append({"partition": partition, "offset": str(offset), "reason": row.get("reason_value", "")})
     after = ""
     while True:
-        rows = sql("""SELECT event_id, any(input_sha256) AS hash, any(reason) AS reason_value,
-            any(watermark) AS cutoff, any(lateness_ms) AS delay_ms,
-            uniqExact(tuple(input_sha256,reason,watermark,lateness_ms)) AS variants
-            FROM risk.processing_outcomes WHERE source_topic={topic:String} AND outcome='LATE'
-            AND startsWith(event_id,{prefix:String}) AND event_id>{after:String}
-            GROUP BY event_id ORDER BY event_id LIMIT 200""",
+        rows = sql("""SELECT payload->>'event_id' AS event_id,min(payload->>'input_sha256') AS hash,min(payload->>'reason') AS reason_value,
+            min((payload->>'watermark')::bigint) AS cutoff,min((payload->>'lateness_ms')::bigint) AS delay_ms,
+            count(DISTINCT (payload->>'input_sha256',payload->>'reason',payload->>'watermark',payload->>'lateness_ms')) AS variants
+            FROM risk.outcomes WHERE source_topic={topic:String} AND payload->>'outcome'='LATE'
+            AND starts_with(payload->>'event_id',{prefix:String}) AND payload->>'event_id'>{after:String}
+            GROUP BY 1 ORDER BY 1 LIMIT 200""",
             topic=report.get("late_topic", report["run_id"] + ".late"), prefix=report["run_id"] + "-payment-", after=after)
         if not rows:
             break

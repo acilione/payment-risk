@@ -26,6 +26,23 @@ public final class MaterializerRows {
           "processed_at");
 
   public static ObjectNode convert(ObjectNode decision, ConsumerRecord<String, byte[]> source) {
+    if (!decision.path("assessment_request_id").asText("initial").equals("initial"))
+      throw new IllegalArgumentException("UNSUPPORTED_ASSESSMENT_REQUEST");
+    String factsText = decision.path("transaction_facts").asText("");
+    if (!factsText.isEmpty()) {
+      var facts = Json.read(factsText);
+      if (!facts.isObject() || facts.has("event_id") || facts.has("producer_time"))
+        throw new IllegalArgumentException("INVALID_TRANSACTION_FACTS");
+      for (String field :
+          List.of("transaction_id", "customer_id", "amount_minor", "currency", "event_time"))
+        if (!facts.path(field).asText().equals(decision.path(field).asText()))
+          throw new IllegalArgumentException("TRANSACTION_FACTS_MISMATCH");
+      var original = ((ObjectNode) facts).deepCopy();
+      original.put("event_id", decision.path("event_id").asText());
+      if (!Audit.inputHash(original).equals(decision.path("input_sha256").asText()))
+        throw new IllegalArgumentException("TRANSACTION_FINGERPRINT_MISMATCH");
+      factsText = Audit.canonical(facts);
+    }
     for (String field : List.of("decision_id", "event_id", "transaction_id", "customer_id"))
       if (decision.path(field).asText().isBlank() || decision.path(field).asText().length() > 256)
         throw new IllegalArgumentException("INVALID_DECISION");
@@ -54,6 +71,8 @@ public final class MaterializerRows {
     for (String field : LEGACY) row.set(field, decision.get(field));
     row.put("source_partition", source.partition()).put("source_offset", source.offset());
     return row.put("evaluation_id", id)
+        .put("transaction_facts", factsText)
+        .put("assessment_request_id", decision.path("assessment_request_id").asText("initial"))
         .put("engine_version", decision.path("engine_version").asText("legacy"))
         .put("policy_id", decision.path("policy_id").asText("dynamic"))
         .put("policy_version", decision.path("policy_version").asLong())

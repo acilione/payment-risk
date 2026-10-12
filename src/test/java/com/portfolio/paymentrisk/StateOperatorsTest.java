@@ -41,6 +41,26 @@ class StateOperatorsTest {
   }
 
   @Test
+  void sameTimestampLimitsIncludeEarlierPaymentsInTheCallback() throws Exception {
+    try (var h = harness(AppConfig.from(Map.of("MAX_DEVICES_PER_CUSTOMER", "1")))) {
+      h.processElement(tx("a", 1000), 1000);
+      h.processElement(Json.write(RiskEngineTest.tx("b", 1000, 100, "other", "APPROVED")), 1000);
+      var error = assertThrows(IllegalStateException.class, () -> h.processWatermark(1000));
+      assertTrue(error.getMessage().contains("device state limit"));
+      assertEquals(1, h.extractOutputValues().size());
+    }
+    try (var h = harness(AppConfig.from(Map.of("MAX_EVENTS_PER_CUSTOMER", "2")))) {
+      h.processElement(tx("old", 1000), 1000);
+      h.processWatermark(1000);
+      h.processElement(tx("a", 2000), 2000);
+      h.processElement(tx("b", 2000), 2000);
+      var error = assertThrows(IllegalStateException.class, () -> h.processWatermark(2000));
+      assertTrue(error.getMessage().contains("history state limit"));
+      assertEquals(2, h.extractOutputValues().size());
+    }
+  }
+
+  @Test
   void rollingFeaturesMatchHistoryAcrossWindowChangesAndExpiryBoundaries() throws Exception {
     var history = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
     var seen = new HashMap<String, Long>();
@@ -313,6 +333,9 @@ class StateOperatorsTest {
       var first = RiskEngineTest.tx("event-a", 1000, 100, "d", "APPROVED");
       h.processElement(new StreamRecord<>(Json.write(first)));
       first.put("event_id", "event-b");
+      h.processElement(new StreamRecord<>(Json.write(first)));
+      assertEquals(1, h.extractOutputValues().size());
+      first.put("amount_minor", 999);
       var error =
           assertThrows(
               IllegalStateException.class,

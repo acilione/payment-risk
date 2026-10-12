@@ -3,6 +3,8 @@
   "name": "RiskDecision",
   "namespace": "com.portfolio.paymentrisk.avro",
   "fields": [
+    { "name": "transaction_facts", "type": "string", "default": "" },
+    { "name": "assessment_request_id", "type": "string", "default": "initial" },
     {
       "name": "decision_id",
       "type": "string"

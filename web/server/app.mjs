@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServingReader } from "./serving-reader.mjs";
+import { postgresPool } from "./postgres-store.mjs";
+import { createPostgresReader } from "./postgres-reader.mjs";
 import { createReader } from "./overview.mjs";
 import { createInvestigationReader, decodeCursor } from "./investigation.mjs";
 
@@ -29,8 +31,14 @@ export async function buildApp({
     },
   });
   await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
-  const serving =
-    process.env.ANALYTICS_MODE === "snapshot"
+  const pool =
+    !reader && (process.env.ANALYTICS_MODE || "postgres") === "postgres"
+      ? postgresPool()
+      : null;
+  if (pool) app.addHook("onClose", () => pool.end());
+  const serving = pool
+    ? createPostgresReader(pool)
+    : process.env.ANALYTICS_MODE === "snapshot"
       ? createServingReader({
           clickhouse: process.env.CLICKHOUSE_URL || "http://127.0.0.1:28123",
           user: process.env.CLICKHOUSE_USER || "risk",

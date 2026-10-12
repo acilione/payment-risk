@@ -79,7 +79,8 @@ public final class ShowcaseProducer {
     start.set("config", configJson);
     start.set("customers", Json.MAPPER.valueToTree(generator.customers()));
     emit(start);
-    long begun = System.nanoTime();
+    long begun;
+    long publishingStartedAt;
     var nextOffsets = new HashMap<TopicPartition, Long>();
     int unique = 0, deliveries = 0;
     long publishingMs = 0, finalEventTime = anchor;
@@ -87,6 +88,12 @@ public final class ShowcaseProducer {
     try (var producer = new KafkaProducer<String, byte[]>(props);
         var publisher =
             new BoundedPaymentPublisher(producer, load ? 512 : 1, ShowcaseProducer::emit)) {
+      publishingStartedAt = System.currentTimeMillis();
+      begun = System.nanoTime();
+      emit(
+          Json.object()
+              .put("kind", "publishing")
+              .put("publishing_started_at", publishingStartedAt));
       for (var sample : generator) {
         if (load) {
           long delay = unique * 1000000000L / generatorConfig.rate() - (System.nanoTime() - begun);
@@ -111,6 +118,10 @@ public final class ShowcaseProducer {
                   .put("target", sample.target())
                   .put("payload_sha256", Audit.sha256(bytes));
           row.set("payment", tx);
+          // Keep the offered schedule outside the payment contract. A blocked generator must
+          // not hide queueing delay by moving the latency origin to its eventual send time.
+          if (load)
+            row.put("scheduled_at", publishingStartedAt + unique * 1000L / generatorConfig.rate());
           publisher.send(
               new ProducerRecord<>(
                   c.topic("payments.raw"), partition, tx.path("customer_id").asText(), bytes),
@@ -195,6 +206,7 @@ public final class ShowcaseProducer {
             .put("acknowledged_deliveries", deliveries + (includeOutcomes ? 2 : 0))
             .put("transport_retries", deliveries - unique)
             .put("control_records", partitions.size())
+            .put("publishing_started_at", publishingStartedAt)
             .put("publishing_elapsed_ms", publishingMs)
             .put("achieved_payments_per_second", unique * 1000.0 / Math.max(1, publishingMs))
             .put("achieved_deliveries_per_second", deliveries * 1000.0 / Math.max(1, publishingMs))

@@ -207,31 +207,32 @@ public class CustomerRiskProcessor
     // Feature expirations run before deleting their source bucket, using this timer's time.
     rolling.expire(t, history);
     int[] removed = expiry.expire(t, history, devices, ctx.timerService());
-    setCount(historyCount, count(historyCount) - removed[0]);
-    setCount(deviceCount, count(deviceCount) - removed[1]);
+    int retained = count(historyCount) - removed[0];
+    int knownDevices = count(deviceCount) - removed[1];
+    int waiting = count(pendingCount);
     var bucket = queue.drain(t);
     if (bucket.isEmpty()) {
-      if (count(historyCount) == 0 && count(deviceCount) == 0 && count(pendingCount) == 0) {
+      if (removed[0] != 0) setCount(historyCount, retained);
+      if (removed[1] != 0) setCount(deviceCount, knownDevices);
+      if (retained == 0 && knownDevices == 0 && waiting == 0) {
         finalizedThrough.clear();
         expiry.clear();
       }
-      if (count(historyCount) == 0 && count(pendingCount) == 0) rolling.clear();
+      if (retained == 0 && waiting == 0) rolling.clear();
       return;
     }
     bucket.sort(Comparator.comparing(n -> n.path("transaction").path("event_id").asText()));
     var current = rows(history.get(t));
     var recent = StateHistory.read(history, t, current);
     for (var item : bucket) {
-      if (count(historyCount) >= config.maxEvents())
+      if (retained >= config.maxEvents())
         throw new IllegalStateException("Customer history state limit exceeded");
       var tx = item.path("transaction");
       String device = tx.path("device_id").asText();
       Long lastSeen = devices.get(device);
-      if (lastSeen == null && count(deviceCount) >= config.maxDevices())
+      if (lastSeen == null && knownDevices >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
       long started = System.nanoTime();
-      var rules = new ArrayList<JsonNode>();
-      item.path("rules").forEach(rules::add);
       int review = item.path("review_threshold").asInt(config.review());
       int reject = item.path("reject_threshold").asInt(config.reject());
       // Only derived immutable policy metadata is cached; managed payment state remains
@@ -239,8 +240,14 @@ public class CustomerRiskProcessor
       String policyKey = review + ":" + reject + ":" + item.path("rules");
       var prepared =
           policyCache.computeIfAbsent(
-              policyKey, ignored -> RiskEngine.prepare(rules, review, reject));
-      boolean incremental = rolling.active() || count(historyCount) >= 64;
+              policyKey,
+              ignored -> {
+                var rules = new ArrayList<JsonNode>();
+                item.path("rules").forEach(rules::add);
+                return RiskEngine.prepare(rules, review, reject);
+              });
+      var rules = prepared.rules();
+      boolean incremental = rolling.active() || retained >= 64;
       var decision =
           RiskEngine.evaluate(
               tx,
@@ -278,15 +285,20 @@ public class CustomerRiskProcessor
                   || (cleanupAt.value() != null && cleanupAt.value() == time));
       if (incremental) rolling.add(feature, ctx.timerService());
       current.add(feature);
-      historyCount.update(count(historyCount) + 1);
-      if (lastSeen == null) deviceCount.update(count(deviceCount) + 1);
+      retained++;
+      if (lastSeen == null) knownDevices++;
       devices.put(device, t);
     }
     history.put(t, Json.write(current));
+    // A synchronous timer callback cannot be checkpointed halfway through. Persist these
+    // counters once, while keeping per-payment limit checks and device updates in order.
+    setCount(historyCount, retained);
+    setCount(deviceCount, knownDevices);
     ctx.timerService().registerEventTimeTimer(t + config.historyMs());
     finalizedThrough.update(t);
-    setCount(pendingCount, count(pendingCount) - bucket.size());
-    if (count(pendingCount) == 0) {
+    waiting -= bucket.size();
+    setCount(pendingCount, waiting);
+    if (waiting == 0) {
       if (pendingWatchdog.value() != null)
         ctx.timerService().deleteProcessingTimeTimer(pendingWatchdog.value());
       pendingWatchdog.clear();

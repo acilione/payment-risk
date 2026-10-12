@@ -31,10 +31,10 @@ export function Architecture({
             <h2>Payment processing</h2>
             <p>
               Flink assesses reported payment attempts from Kafka. Risk
-              assessments and invalid or late records reach ClickHouse through
+              assessments and invalid or late records reach PostgreSQL through
               committed Kafka outputs. A separate consumer archives every
-              original input. This pipeline monitors payments; it does not
-              authorize them.
+              original input in ClickHouse. This pipeline monitors payments; it
+              does not authorize them.
             </p>
           </div>
           <a
@@ -69,8 +69,8 @@ export function Architecture({
             {
               icon: Database,
               step: "04",
-              name: "ClickHouse",
-              detail: "Input archive and published analytics",
+              name: "PostgreSQL",
+              detail: "Unique assessments and incremental summaries",
             },
           ].map(({ icon: Icon, step, name, detail }, index) => {
             return (
@@ -103,7 +103,7 @@ export function Architecture({
           {
             icon: CheckCheck,
             title: "Delivery and duplicates",
-            text: "Flink checks event and transaction identities, with a default 24-hour retention. Checkpoints coordinate state with Kafka transactions. Database retries can create physical copies; logical views avoid double counting and block ambiguous results. Permanent input uniqueness is not provided.",
+            text: "Flink checks event and transaction identities for 24 hours by default. PostgreSQL permanently identifies each initial assessment by its source system and transaction ID. Retries preserve totals; conflicting results block analytics. Permanent uniqueness before Flink is not provided.",
           },
           {
             icon: SlidersHorizontal,

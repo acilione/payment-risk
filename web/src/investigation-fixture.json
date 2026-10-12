@@ -118,7 +118,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "94a7169bf15d63e7e35ebb240be7da8c5ef48c65efd6dadd8a2705d6f673f396"
+        "input_sha256": "94a7169bf15d63e7e35ebb240be7da8c5ef48c65efd6dadd8a2705d6f673f396",
+        "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-5\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-account-takeover-6\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -216,7 +218,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "07a0658952fd273f50c167f26d965eba91561284b8d580f2d2872d13db507d70"
+            "input_sha256": "07a0658952fd273f50c167f26d965eba91561284b8d580f2d2872d13db507d70",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-account-takeover-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -314,7 +318,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "37e4642c347d71abf09ef043d394032694ddebeeecc0203cec5594ef9a5c6a3b"
+            "input_sha256": "37e4642c347d71abf09ef043d394032694ddebeeecc0203cec5594ef9a5c6a3b",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-0\",\"event_time\":1791539900000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-account-takeover-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -412,7 +418,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "a42994e74d121f57234eb21434f71bb337e05256dfc5c8b7545866384e0958a6"
+            "input_sha256": "a42994e74d121f57234eb21434f71bb337e05256dfc5c8b7545866384e0958a6",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-1\",\"event_time\":1791539920000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-account-takeover-2\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -510,7 +518,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "5bb7ba227bb5cf32f72acfc74c5c8e2b120e9c66967fdcdfdb2222d793730904"
+            "input_sha256": "5bb7ba227bb5cf32f72acfc74c5c8e2b120e9c66967fdcdfdb2222d793730904",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-2\",\"event_time\":1791539940000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-account-takeover-3\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -612,7 +622,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "4d2a4187e134b9e6f186fa66df5ab22e4fe1821eecc7e85ac6b8292868375162"
+            "input_sha256": "4d2a4187e134b9e6f186fa66df5ab22e4fe1821eecc7e85ac6b8292868375162",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-3\",\"event_time\":1791539960000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-account-takeover-4\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -715,7 +727,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "9ab1c0444a79a8b4b6097aa2cbcd39d4e034f5c2c03fc52bad98e935b42ef987"
+            "input_sha256": "9ab1c0444a79a8b4b6097aa2cbcd39d4e034f5c2c03fc52bad98e935b42ef987",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-4\",\"event_time\":1791539980000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-account-takeover-5\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -819,7 +833,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "94a7169bf15d63e7e35ebb240be7da8c5ef48c65efd6dadd8a2705d6f673f396"
+            "input_sha256": "94a7169bf15d63e7e35ebb240be7da8c5ef48c65efd6dadd8a2705d6f673f396",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-account-takeover\",\"device_id\":\"demo-account-takeover-attacker-5\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-account-takeover-6\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -923,7 +939,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "e5d4e4bc2c24cd76b8a56df06d5f7dcd63994d46844d7ea7cb5bcf501ab41b3d"
+        "input_sha256": "e5d4e4bc2c24cd76b8a56df06d5f7dcd63994d46844d7ea7cb5bcf501ab41b3d",
+        "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-card-testing-5\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -1021,7 +1039,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "775976b26e90bccccc81a83e6aef25be03b5ab829e97cbabe2c34a088c2db7d6"
+            "input_sha256": "775976b26e90bccccc81a83e6aef25be03b5ab829e97cbabe2c34a088c2db7d6",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-card-testing-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1119,7 +1139,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "60526591336eee880147690dc99e5da423dfe8b9f634a5c495805353aea78261"
+            "input_sha256": "60526591336eee880147690dc99e5da423dfe8b9f634a5c495805353aea78261",
+            "transaction_facts": "{\"amount_minor\":100,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791539900000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-card-testing-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1217,7 +1239,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "f4848584d8922de12d2b990f578378635fd6ff5875fc4b137f455450805e8d07"
+            "input_sha256": "f4848584d8922de12d2b990f578378635fd6ff5875fc4b137f455450805e8d07",
+            "transaction_facts": "{\"amount_minor\":100,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791539920000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-card-testing-2\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1315,7 +1339,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "48beadd6c597c16351608dd1a6ef763023605894a07d60a3b643024fc5879179"
+            "input_sha256": "48beadd6c597c16351608dd1a6ef763023605894a07d60a3b643024fc5879179",
+            "transaction_facts": "{\"amount_minor\":100,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791539940000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-card-testing-3\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1413,7 +1439,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "696cd58ea6ac8fb1949a60010bb6b937bfa7b21f991b9c033eb4aa87abcd626a"
+            "input_sha256": "696cd58ea6ac8fb1949a60010bb6b937bfa7b21f991b9c033eb4aa87abcd626a",
+            "transaction_facts": "{\"amount_minor\":100,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791539960000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-card-testing-4\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1511,7 +1539,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "e5d4e4bc2c24cd76b8a56df06d5f7dcd63994d46844d7ea7cb5bcf501ab41b3d"
+            "input_sha256": "e5d4e4bc2c24cd76b8a56df06d5f7dcd63994d46844d7ea7cb5bcf501ab41b3d",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-card-testing\",\"device_id\":\"demo-card-testing-attacker\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-card-testing-5\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -1615,7 +1645,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "2fb02902810bd97a5b77eff4207379fc62116092b5aad9659c7b6dba32b6fae9"
+        "input_sha256": "2fb02902810bd97a5b77eff4207379fc62116092b5aad9659c7b6dba32b6fae9",
+        "transaction_facts": "{\"amount_minor\":220,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-everyday\",\"device_id\":\"demo-everyday-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-transport\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-everyday-2\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -1713,7 +1745,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "d131f5c933a7828ab11a0f21f04df0973819bda8c23099cf53a95a622a23a957"
+            "input_sha256": "d131f5c933a7828ab11a0f21f04df0973819bda8c23099cf53a95a622a23a957",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-everyday\",\"device_id\":\"demo-everyday-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-everyday-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1811,7 +1845,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "a15c1a626a0d5cd63e7b8196b629832fcb0316c6ff716cdf111f42f2dcdb0a08"
+            "input_sha256": "a15c1a626a0d5cd63e7b8196b629832fcb0316c6ff716cdf111f42f2dcdb0a08",
+            "transaction_facts": "{\"amount_minor\":4270,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-everyday\",\"device_id\":\"demo-everyday-phone\",\"event_time\":1791539400000,\"merchant_id\":\"synthetic-grocer\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-everyday-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -1909,7 +1945,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "2fb02902810bd97a5b77eff4207379fc62116092b5aad9659c7b6dba32b6fae9"
+            "input_sha256": "2fb02902810bd97a5b77eff4207379fc62116092b5aad9659c7b6dba32b6fae9",
+            "transaction_facts": "{\"amount_minor\":220,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-everyday\",\"device_id\":\"demo-everyday-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-transport\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-everyday-2\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -2013,7 +2051,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "96c8790e6eceec77f63e58993a50affbb43dbb979163fc6a704e87ac044fb9d4"
+        "input_sha256": "96c8790e6eceec77f63e58993a50affbb43dbb979163fc6a704e87ac044fb9d4",
+        "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-known-device-large\",\"device_id\":\"demo-known-device-large-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-appliances\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-known-device-large-1\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -2111,7 +2151,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "d6b65d1e0423e680310139a32dfeb584c156be2b55482e8352e6859a5f3cfa42"
+            "input_sha256": "d6b65d1e0423e680310139a32dfeb584c156be2b55482e8352e6859a5f3cfa42",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-known-device-large\",\"device_id\":\"demo-known-device-large-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-known-device-large-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -2209,7 +2251,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "96c8790e6eceec77f63e58993a50affbb43dbb979163fc6a704e87ac044fb9d4"
+            "input_sha256": "96c8790e6eceec77f63e58993a50affbb43dbb979163fc6a704e87ac044fb9d4",
+            "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-known-device-large\",\"device_id\":\"demo-known-device-large-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-appliances\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-known-device-large-1\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -2313,7 +2357,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "dd96de21b1f349125637bfc450d7e8f390bd5097ad0dd00fc2409e9b4d8a49c2"
+        "input_sha256": "dd96de21b1f349125637bfc450d7e8f390bd5097ad0dd00fc2409e9b4d8a49c2",
+        "transaction_facts": "{\"amount_minor\":2000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-legitimate-retry\",\"device_id\":\"demo-legitimate-retry-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-grocer\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-legitimate-retry-2\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -2411,7 +2457,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "0cd23c6a9453f05da3f663ad21ab2bbc8989cfc917aafbb6599aa8cfd736234e"
+            "input_sha256": "0cd23c6a9453f05da3f663ad21ab2bbc8989cfc917aafbb6599aa8cfd736234e",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-legitimate-retry\",\"device_id\":\"demo-legitimate-retry-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-legitimate-retry-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -2509,7 +2557,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "9e4fd95b212bac9fac4d2f15c2c13a217d3da5175909db95d72935c9c5c91ba2"
+            "input_sha256": "9e4fd95b212bac9fac4d2f15c2c13a217d3da5175909db95d72935c9c5c91ba2",
+            "transaction_facts": "{\"amount_minor\":2000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-legitimate-retry\",\"device_id\":\"demo-legitimate-retry-phone\",\"event_time\":1791539980000,\"merchant_id\":\"synthetic-grocer\",\"status\":\"DECLINED\",\"transaction_id\":\"txn-demo-legitimate-retry-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -2607,7 +2657,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "dd96de21b1f349125637bfc450d7e8f390bd5097ad0dd00fc2409e9b4d8a49c2"
+            "input_sha256": "dd96de21b1f349125637bfc450d7e8f390bd5097ad0dd00fc2409e9b4d8a49c2",
+            "transaction_facts": "{\"amount_minor\":2000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-legitimate-retry\",\"device_id\":\"demo-legitimate-retry-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-grocer\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-legitimate-retry-2\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -2715,7 +2767,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "c3609c59f890677511f2ce5d9aaa38a1040443bcefacf9cc3c3f17a6a25f9708"
+        "input_sha256": "c3609c59f890677511f2ce5d9aaa38a1040443bcefacf9cc3c3f17a6a25f9708",
+        "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-multiple-devices\",\"device_id\":\"demo-multiple-devices-attacker-2\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-multiple-devices-3\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -2813,7 +2867,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "c225df2d5bd2e75fe4f807cca0a28bef1ac1c47d805f6ad3cd7de201fd6ac246"
+            "input_sha256": "c225df2d5bd2e75fe4f807cca0a28bef1ac1c47d805f6ad3cd7de201fd6ac246",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-multiple-devices\",\"device_id\":\"demo-multiple-devices-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-multiple-devices-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -2911,7 +2967,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "6e4b6fba61cea769a6f81e66b78f95228ae6a0b2a49b143c0a30d7ccf4d85796"
+            "input_sha256": "6e4b6fba61cea769a6f81e66b78f95228ae6a0b2a49b143c0a30d7ccf4d85796",
+            "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-multiple-devices\",\"device_id\":\"demo-multiple-devices-attacker-0\",\"event_time\":1791539920000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-multiple-devices-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3009,7 +3067,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "123e8ba19e105da48014c08fe2898ddb8b15dc98d1c191dd10b3f19d9576d88a"
+            "input_sha256": "123e8ba19e105da48014c08fe2898ddb8b15dc98d1c191dd10b3f19d9576d88a",
+            "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-multiple-devices\",\"device_id\":\"demo-multiple-devices-attacker-1\",\"event_time\":1791539960000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-multiple-devices-2\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3111,7 +3171,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "c3609c59f890677511f2ce5d9aaa38a1040443bcefacf9cc3c3f17a6a25f9708"
+            "input_sha256": "c3609c59f890677511f2ce5d9aaa38a1040443bcefacf9cc3c3f17a6a25f9708",
+            "transaction_facts": "{\"amount_minor\":110000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-multiple-devices\",\"device_id\":\"demo-multiple-devices-attacker-2\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-multiple-devices-3\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -3215,7 +3277,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "c97b90a64b5c7e48a68a2601a156f9b6982e58f37725528ec8a26254a1e459be"
+        "input_sha256": "c97b90a64b5c7e48a68a2601a156f9b6982e58f37725528ec8a26254a1e459be",
+        "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-new-phone\",\"device_id\":\"demo-new-phone-replacement-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-new-phone-1\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -3313,7 +3377,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "1c51dddbc0d5fa81d8276a17d4ca4875fb6b2e89e35d8b08497d316ad638f6c2"
+            "input_sha256": "1c51dddbc0d5fa81d8276a17d4ca4875fb6b2e89e35d8b08497d316ad638f6c2",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-new-phone\",\"device_id\":\"demo-new-phone-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-new-phone-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3411,7 +3477,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "c97b90a64b5c7e48a68a2601a156f9b6982e58f37725528ec8a26254a1e459be"
+            "input_sha256": "c97b90a64b5c7e48a68a2601a156f9b6982e58f37725528ec8a26254a1e459be",
+            "transaction_facts": "{\"amount_minor\":90000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-new-phone\",\"device_id\":\"demo-new-phone-replacement-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-electronics\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-new-phone-1\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -3515,7 +3583,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "035ec2ae3cf3ca5ce4ac9c0a94d5d02044a7a1aee7a7c1e02984878a4647468a"
+        "input_sha256": "035ec2ae3cf3ca5ce4ac9c0a94d5d02044a7a1aee7a7c1e02984878a4647468a",
+        "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-6\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -3613,7 +3683,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "f806455d2f1b02957c0695b46704de6975e0a4abdc237f3b4dd9cfa05d3f0bda"
+            "input_sha256": "f806455d2f1b02957c0695b46704de6975e0a4abdc237f3b4dd9cfa05d3f0bda",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3711,7 +3783,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "dd8f88915cc5e9b6168b03fd98c572a20738a5ff84f79c81d68f9749aad80cf1"
+            "input_sha256": "dd8f88915cc5e9b6168b03fd98c572a20738a5ff84f79c81d68f9749aad80cf1",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791539925000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-1\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3809,7 +3883,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "f461da87b1b2e69fef26ce1f0d65e381176a26ccfed2d76c1c3ec459755c8a2d"
+            "input_sha256": "f461da87b1b2e69fef26ce1f0d65e381176a26ccfed2d76c1c3ec459755c8a2d",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791539940000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-2\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -3907,7 +3983,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "d34dc80988666ec3bf27dde2e0a1de6989c24484a7bb0f84bf73d35e7f96af29"
+            "input_sha256": "d34dc80988666ec3bf27dde2e0a1de6989c24484a7bb0f84bf73d35e7f96af29",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791539955000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-3\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -4005,7 +4083,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "468accd59e89839ec9ff6932999e8e37ff94050cb815eb33a8312313fa9f93ab"
+            "input_sha256": "468accd59e89839ec9ff6932999e8e37ff94050cb815eb33a8312313fa9f93ab",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791539970000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-4\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -4103,7 +4183,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "f330ce50ca7545621d050a3827dfe3bdbe3d70a4ad4241177bf6cd3384a77d30"
+            "input_sha256": "f330ce50ca7545621d050a3827dfe3bdbe3d70a4ad4241177bf6cd3384a77d30",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791539985000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-5\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -4201,7 +4283,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "035ec2ae3cf3ca5ce4ac9c0a94d5d02044a7a1aee7a7c1e02984878a4647468a"
+            "input_sha256": "035ec2ae3cf3ca5ce4ac9c0a94d5d02044a7a1aee7a7c1e02984878a4647468a",
+            "transaction_facts": "{\"amount_minor\":500,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-small-payment-burst\",\"device_id\":\"demo-small-payment-burst-attacker\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-small-payment-burst-6\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
@@ -4305,7 +4389,9 @@
         ],
         "policy_id": "dynamic",
         "policy_version": 0,
-        "input_sha256": "635751834a9752de8f5ad166dac5bb98c29d585746d076d5487366f847e41ada"
+        "input_sha256": "635751834a9752de8f5ad166dac5bb98c29d585746d076d5487366f847e41ada",
+        "transaction_facts": "{\"amount_minor\":7000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-stolen-trusted-device\",\"device_id\":\"demo-stolen-trusted-device-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-stolen-trusted-device-1\"}",
+        "assessment_request_id": "initial"
       },
       "timeline": [
         {
@@ -4403,7 +4489,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "4c277ada759d3ed1ce8516845c3c2a8963caa5cc19be74758a5d74c22cd5f21c"
+            "input_sha256": "4c277ada759d3ed1ce8516845c3c2a8963caa5cc19be74758a5d74c22cd5f21c",
+            "transaction_facts": "{\"amount_minor\":350,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-stolen-trusted-device\",\"device_id\":\"demo-stolen-trusted-device-phone\",\"event_time\":1791538800000,\"merchant_id\":\"synthetic-cafe\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-stolen-trusted-device-0\"}",
+            "assessment_request_id": "initial"
           }
         },
         {
@@ -4501,7 +4589,9 @@
             ],
             "policy_id": "dynamic",
             "policy_version": 0,
-            "input_sha256": "635751834a9752de8f5ad166dac5bb98c29d585746d076d5487366f847e41ada"
+            "input_sha256": "635751834a9752de8f5ad166dac5bb98c29d585746d076d5487366f847e41ada",
+            "transaction_facts": "{\"amount_minor\":7000,\"country\":\"IT\",\"currency\":\"EUR\",\"customer_id\":\"demo-stolen-trusted-device\",\"device_id\":\"demo-stolen-trusted-device-phone\",\"event_time\":1791540000000,\"merchant_id\":\"synthetic-online-store\",\"status\":\"APPROVED\",\"transaction_id\":\"txn-demo-stolen-trusted-device-1\"}",
+            "assessment_request_id": "initial"
           }
         }
       ]
