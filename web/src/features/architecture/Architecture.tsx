@@ -30,8 +30,11 @@ export function Architecture({
           <div>
             <h2>Payment processing</h2>
             <p>
-              Flink reads payments from Kafka and writes risk decisions back to
-              Kafka. ClickHouse stores those decisions for dashboard queries.
+              Flink assesses reported payment attempts from Kafka. Risk
+              assessments and invalid or late records reach ClickHouse through
+              committed Kafka outputs. A separate consumer archives every
+              original input. This pipeline monitors payments; it does not
+              authorize them.
             </p>
           </div>
           <a
@@ -60,14 +63,14 @@ export function Architecture({
             {
               icon: ShieldCheck,
               step: "03",
-              name: "Decision log",
-              detail: "Transactional Kafka output",
+              name: "Processing outputs",
+              detail: "Assessments, invalid and late records",
             },
             {
               icon: Database,
               step: "04",
               name: "ClickHouse",
-              detail: "Dashboard queries",
+              detail: "Input archive and dashboard queries",
             },
           ].map(({ icon: Icon, step, name, detail }, index) => {
             return (
@@ -95,22 +98,32 @@ export function Architecture({
           {
             icon: Clock3,
             title: "Event ordering",
-            text: "Payments are ordered by event time with a 10-second allowance for out-of-order arrivals. Late payments are sent to a separate output. Pending payments remain buffered when the stream is idle.",
+            text: "Payments are ordered by event time, with a default 10-second allowance for out-of-order arrivals. Late payments are stored separately. An idle stream does not force pending payments to finalize.",
           },
           {
             icon: CheckCheck,
             title: "Delivery and duplicates",
-            text: "Flink checkpoints coordinate state with Kafka transactions. Consumers read committed decisions. Repeated event IDs are filtered for 24 hours.",
+            text: "Flink checks event and transaction identities, with a default 24-hour retention. Checkpoints coordinate state with Kafka transactions. Database retries can create physical copies; logical views avoid double counting and block ambiguous results. Permanent input uniqueness is not provided.",
           },
           {
             icon: SlidersHorizontal,
-            title: "Rule updates",
-            text: "Kafka distributes rule updates to all risk workers. Older rule versions are rejected. Each payment keeps the rule settings recorded when it entered processing.",
+            title: "Rule policies",
+            text: "The showcase and non-local deployments use a frozen policy catalog. Local development also supports rule updates through Kafka. Each payment retains the rule settings used for its assessment.",
+          },
+          {
+            icon: Database,
+            title: "Input archive and outcomes",
+            text: "An independent consumer stores original payment bytes and source coordinates even while Flink is unavailable. Database consumers commit offsets only after persistence. Reconciliation accounts for assessments, invalid inputs and late arrivals, and reports unresolved inputs.",
+          },
+          {
+            icon: Layers3,
+            title: "Customer state",
+            text: "Pending payments are stored individually. Dense histories use exact rolling counts and sums; smaller histories use the reference calculation. Expiry indexes remove old history and device entries. State limits stop processing rather than discard required history.",
           },
           {
             icon: Gauge,
             title: "Processing latency",
-            text: "Time to finalize a decision includes waiting for event ordering. Time to publish it also includes waiting for a checkpoint. Rule evaluation time is measured separately.",
+            text: "Visible results include time spent waiting for event ordering, a completed checkpoint and database writes. Rule evaluation time is measured separately. The load reports distinguish these measurements.",
           },
         ].map(({ icon: Icon, title, text }) => {
           return (

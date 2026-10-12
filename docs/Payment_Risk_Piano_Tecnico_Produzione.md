@@ -1,9 +1,9 @@
 # Payment Risk — Piano tecnico di evoluzione verso la produzione
 
-**Stato:** proposta iniziale con seconda analisi e interventi sul branch `feat/production-plan`  
-**Data della review:** 9 ottobre 2026  
+**Stato:** piano originario e analisi degli interventi confluiti in `main`  
+**Ultimo aggiornamento:** 12 ottobre 2026  
 **Repository:** [acilione/payment-risk](https://github.com/acilione/payment-risk)  
-**Baseline verificata:** branch `main`, commit [`9dfd9d6a063394039eed5951d5d0060a3bc92eee`](https://github.com/acilione/payment-risk/tree/9dfd9d6a063394039eed5951d5d0060a3bc92eee)  
+**Baseline della proposta del 9 ottobre:** branch `main`, commit [`9dfd9d6a063394039eed5951d5d0060a3bc92eee`](https://github.com/acilione/payment-risk/tree/9dfd9d6a063394039eed5951d5d0060a3bc92eee)  
 **Destinatari:** Backend/Data Engineering, Platform/SRE, Security, Fraud/Risk, Data Governance  
 **Ambito assunto per il piano:** *monitoraggio e valutazione antifrode asincroni*, non decisione sincrona nel percorso di autorizzazione.
 
@@ -11,7 +11,19 @@
 
 ---
 
-> Le sezioni 1-11 descrivono la proposta e la baseline originarie. La [seconda analisi](#12-seconda-analisi-critica-e-interventi-sul-branch) distingue le modifiche implementate dai requisiti ancora da definire. Il dominio resta quello sintetico attuale, come concordato.
+> Le sezioni 1–11 conservano la proposta del 9 ottobre: i relativi diagrammi, gap e descrizioni AS-IS si riferiscono alla baseline originaria, non al codice attuale. Le sezioni 12–14 registrano le valutazioni e gli interventi successivi. Il dominio resta simulato, come concordato.
+
+## Stato attuale
+
+Gli interventi del branch `feat/production-plan` sono confluiti in `main` con il commit [`73191ce`](https://github.com/acilione/payment-risk/commit/73191ce1d635db6ad4ce243845c1c3ed87c5ca9a). Il [README](../README.md) è il riferimento tecnico aggiornato; questo documento conserva le motivazioni e le proposte, comprese quelle non adottate.
+
+- **Pipeline e conservazione:** controllo di identità per evento e transazione, archivio indipendente degli ingressi, valutazioni e record invalidi/late persistiti, riconciliazione degli ingressi confermati e politica esplicita di replay. I conflitti non vengono risolti scegliendo arbitrariamente un risultato. La deduplica Flink resta limitata dal TTL.
+- **Stato e carico:** pending memorizzati individualmente, feature incrementali per storie dense, indici di scadenza e batch DB configurabili per byte, righe ed età. I test confrontano le evidenze con l'algoritmo di riferimento e verificano il ripristino dello stato precedente.
+- **Dimostrazione:** generatore configurabile e riproducibile attraverso l'intera pipeline, dashboard di indagine con paginazione e demo statica esportata da una verifica reale del dominio simulato. Le nove storie della sezione 13 restano una fixture di integrazione distinta dal generatore configurabile.
+- **Misure:** [confronto dello stato](evidence/state-load-comparison-2026-10-12.json), [carico con indisponibilità del DB e recupero](evidence/pipeline-load-recovery-2026-10-12.json) e [limiti delle query analitiche](../README.md#analytical-query-load). Sono esperimenti locali o di CI, non una qualifica di capacità bancaria.
+- **Ancora da realizzare:** registro transazionale permanente delle identità, aggregati della dashboard corretti anche dopo replay, storage replicato e prove di ripristino del deployment reale. IdP, contratti di produzione e valutazione antifrode su esiti reali richiedono integrazioni e dati che non sono disponibili.
+
+I dettagli di configurazione, modello dati, procedure operative e limiti sono nel README, senza duplicarne qui la specifica.
 
 ## 1. Executive summary
 
@@ -552,22 +564,22 @@ Questo risolve il doppio conteggio dei retry nel modello analitico, non l'unicit
 | PR-03, pending e late | Mantenuta finalizzazione solo in event time; aggiunti watchdog e alert delle code pendenti. | Se serve una scadenza finita, usare completezza dichiarata dalla fonte oppure un esito provvisorio esplicito con successiva revisione. Non avanzare il watermark perché e trascorso tempo di parete. |
 | PR-04, policy deterministiche | Catalogo completo per deployment, ID/versione, soglie, checksum opzionale, snapshot nei pending e nell'output. Obbligatorio fuori dal locale. | Approvazione e firma del rilascio. `effective_at` da solo non dimostra che siano arrivate tutte le policy applicabili; servono un catalogo completo o una barriera di attivazione. |
 | PR-05, accessi e privacy | Payload DLQ omesso per default; hash, lunghezza e coordinate conservati. Capture consentita solo localmente. | IdP/RBAC, identità DB distinte e accessi ai dati late/audit restano necessari prima di dati reali. Non si dichiara implementata l'autenticazione. |
-| PR-06, riconciliazione/replay | Replay delle sole decisioni con dry run, limiti, offset finali fissati, motivazione, manifest e digest delle coordinate. Test di riconciliazione fra Kafka decisioni e ClickHouse. | Riconciliazione completa fra ingressi accettati, duplicati, pending, late, DLQ e decisioni; archivio durevole dei manifest. I contatori Flink non sono una contabilita persistente. |
-| PR-07, materializer | Backoff con jitter e budget finito, metriche, quarantena durevole dei record invalidi, commit dopo tutti gli insert, errori infrastrutturali propagati. | Misurare catch-up e retention su guasti lunghi; garantire durabilità/replica dello storage nel cluster effettivo. |
+| PR-06, riconciliazione/replay | Replay delle decisioni con dry run, limiti, offset finali fissati, motivazione, manifest e digest. Riconciliazione degli ingressi confermati con archivio, valutazioni e record invalidi/late; duplicati riconosciuti, contraddizioni bloccanti e ingressi irrisolti espliciti. Replay storico degli ingressi solo in un job isolato. | Rendere continua la riconciliazione fuori dallo showcase e conservare durevolmente manifest e risultati. Un ingresso pending resta irrisolto finché non esiste un esito verificato. |
+| PR-07, materializer | Backoff con jitter e budget finito, metriche, quarantena durevole, batch configurabili per byte/righe/età e commit dei soli offset persistiti. Errori infrastrutturali propagati. | Misurare catch-up e retention su guasti lunghi; garantire durabilità/replica dello storage nel cluster effettivo. |
 | PR-08, HA/DR | Proposta corretta, non realizzata con un falso staging locale. Restano i manifest e i controlli di deployment esistenti. | Kafka replicato, quorum, registry/DB, Flink HA, object store e ClickHouse ridondanti; prove di perdita nodo/zona e restore completo. |
 | PR-09, SLO | Aggiunti indicatori e alert per materializer, quarantena e pending. | Stabilire SLI misurabili e obiettivi condivisi. 99,9% e 60 secondi nel piano sono esempi, non risultati acquisiti. |
-| PR-10, carico | Necessario, ma nessun nuovo numero di capacità viene dichiarato. | Test sostenuto, hot key, backlog, checkpoint grandi, saturazione disco e tempi di recupero. Il benchmark locale esistente non basta. |
+| PR-10, carico | Eseguiti confronti dello stato su cinque profili, query concorrenti e un carico di 10.000 valutazioni con guasto DB, recupero e replay verificato. Report e comandi riproducibili nel README. | Carico sostenuto, checkpoint grandi, saturazione disco e perdita nodo sul deployment effettivo. I risultati locali non dimostrano capacità bancaria. |
 | PR-11, efficacia antifrode | Corretto; non implementabile con etichette inventate. | Esiti reali, ritardo delle etichette, precision/recall, costi dei falsi positivi e shadow mode. Correttezza tecnica non implica efficacia delle regole. |
-| PR-12, feature incrementali | Non riscrivere lo stato senza profiling. | Ottimizzare solo mantenendo finestre, eventi con uguale timestamp, overflow e compatibilità dei savepoint; confrontare con l'algoritmo di riferimento. |
-| PR-13, frontend/API | Utile ma secondario all'integrità. Aggiunto il blocco dei totali ambigui. | Paginazione server e componenti più piccoli quando servono dati oltre gli ultimi 100 risultati. |
+| PR-12, feature incrementali | Dopo il profiling, implementati aggregati esatti da 64 pagamenti conservati, pending individuali e indici di scadenza. Confrontate evidenze complete e restore con il riferimento. | Misurare più a lungo con distribuzioni rappresentative: il profilo ad alta cardinalità regredisce e la finalizzazione di un grande gruppo allo stesso timestamp supera ancora il budget esplorativo. |
+| PR-13, frontend/API | Dashboard di indagine, ricerca clienti e timeline con paginazione server, componenti React separati per funzione e blocco dei totali ambigui. | Le viste globali di integrità continuano a leggere lo storico. Introdurre aggregati corretti rispetto a duplicati e replay prima di promettere tempi costanti su grandi volumi. |
 | PR-14, percorso sincrono | Fuori scope e da non confondere con questo lavoro. | Prodotto distinto, latenza e fallback approvati, feature sufficientemente aggiornate e test dedicati. |
 
 ### 12.5 Resilienza: confini e priorità
 
-1. **Produttore ? Kafka.** Un'identità stabile deve nascere dal produttore. Conferma solo dopo scrittura durevole, replica e minimum in-sync replicas adatti alla tolleranza richiesta. Il broker unico Compose non sopravvive alla perdita del suo disco.
-2. **Kafka ? Flink ? Kafka.** Checkpoint, stato e sink transazionali coordinano il recovery, ma non eliminano un nuovo record business duplicato pubblicato dal produttore. Il ripristino deve usare stato e posizioni coerenti; timeout delle transazioni e retention devono coprire l'interruzione prevista.
-3. **Kafka ? ClickHouse.** Il consumer può ripetere una consegna, ma non conferma una scrittura fallita. Il crash dopo insert e prima di commit è previsto. Quarantena e risultati devono essere persistiti prima del commit. Una risposta positiva non prova da sola che esistano repliche e backup: dipende dal deployment.
-4. **Archivio ? dashboard.** Niente scelta arbitraria fra risultati incompatibili. L'API blocca la pubblicazione se l'archivio segnala problemi; cache e aggiornamenti periodici comportano una visibilità ritardata. La disponibilità e subordinata alla correttezza dei totali.
+1. **Produttore → Kafka.** Un'identità stabile deve nascere dal produttore. Conferma solo dopo scrittura durevole, replica e minimum in-sync replicas adatti alla tolleranza richiesta. Il broker unico Compose non sopravvive alla perdita del suo disco.
+2. **Kafka → Flink → Kafka.** Checkpoint, stato e sink transazionali coordinano il recovery, ma non eliminano un nuovo record business duplicato pubblicato dal produttore. Il ripristino deve usare stato e posizioni coerenti; timeout delle transazioni e retention devono coprire l'interruzione prevista.
+3. **Kafka → ClickHouse.** Il consumer può ripetere una consegna, ma non conferma una scrittura fallita. Il crash dopo insert e prima di commit è previsto. Quarantena e risultati devono essere persistiti prima del commit. Una risposta positiva non prova da sola che esistano repliche e backup: dipende dal deployment.
+4. **Archivio → dashboard.** Niente scelta arbitraria fra risultati incompatibili. L'API blocca la pubblicazione se l'archivio segnala problemi; cache e aggiornamenti periodici comportano una visibilità ritardata. La disponibilità e subordinata alla correttezza dei totali.
 5. **Disastro e recupero.** Definire RPO e RTO per ogni confine e testare anche Kafka, schemi, checkpoint e archivio insieme. Replicare non sostituisce un backup contro errori logici. Senza ambiente e requisiti non assegno valori numerici fittizi.
 
 Resta una lacuna importante: dopo la scadenza della deduplica, un vecchio evento può entrare di nuovo nello stato live, specialmente se anche lo storico cliente e stato eliminato. Il controllo nell'archivio protegge i totali pubblicati quando rileva contraddizioni, ma non rende corrette retroattivamente tutte le feature calcolate. Per traffico reale con retry oltre il TTL occorre il registro d'ingresso durevole oppure un contratto di retention verificabile. Questo è un requisito di progetto, non una nota da ignorare perché i test passano.
@@ -601,7 +613,9 @@ L'obiettivo chiarito è simulare persone che effettuano pagamenti e riconoscere 
 
 Le modifiche precedenti a identità, spiegazioni, replay e recovery sostengono questi obiettivi e rimangono. Alcune predisposizioni di deployment superano il minimo necessario per una dimostrazione: non sono una ragione per proseguire automaticamente verso HA multi-regione, IdP aziendale, ledger permanente o autorizzazione sincrona. Serviranno soltanto requisiti e ambienti concreti a giustificarli. Per il dominio simulato, un contratto di retry entro il TTL e il divieto di rigiocare ingressi storici nel job live restano limiti espliciti; non si dichiara risolta l'unicità senza scadenza.
 
-### Intervento coerente con l'obiettivo
+### Fixture iniziale di integrazione
+
+Questa fixture precede il generatore configurabile oggi usato nello showcase; i risultati riportati qui riguardano soltanto questi nove casi.
 
 Aggiunto un dataset di nove storie sintetiche con dispositivi e clienti stabili, merchant, importi e successioni temporali motivati. Le storie comprendono acquisti abituali, acquisto costoso legittimo, cambio telefono, account takeover, card testing, più dispositivi, piccoli pagamenti ravvicinati, dispositivo conosciuto rubato e retry dopo un declino. Le etichette non entrano nella pipeline. Il report contiene la timeline e le evidenze, e confronta un pagamento finale per storia per evitare di confondere il numero di eventi di preparazione con il numero di casi valutati.
 
@@ -611,7 +625,7 @@ Con le regole correnti, tre casi sospetti vengono segnalati, due sfuggono e un c
 
 ### Prossimi passi, senza ampliare indiscriminatamente lo scope
 
-Prima aumentare la varietà delle storie: frequenza e importi per cliente, storia di più giorni, cambi legittimi di abitudini e attacchi separati dalle regole che li devono riconoscere. Poi confrontare soglie e segnali su scenari di valutazione distinti da quelli usati per configurarli. Non usare la precisione di nove esempi come metrica commerciale e non introdurre machine learning senza dati e un confronto utile con le regole esistenti.
+Il generatore configurabile ora varia clienti, frequenze, importi, dispositivi e profili con un seed riproducibile; le etichette dei casi restano separate dal punteggio. Il passo successivo è confrontare soglie e segnali su scenari di valutazione distinti da quelli usati per configurarli, ampliando anche la storia e i cambi legittimi di abitudini. Non usare la precisione di nove esempi come metrica commerciale e non introdurre machine learning senza dati e un confronto utile con le regole esistenti.
 
 La resilienza resta necessaria per non perdere o duplicare l'evidenza, ma il requisito proporzionato qui è un recovery dimostrabile con riconciliazione, non una promessa generica di essere "iper resiliente". Per dati reali andrebbero rivalutati retention, accessi, disponibilità, unicità durevole e costi degli errori insieme ai responsabili del servizio.
 
@@ -619,7 +633,7 @@ La resilienza resta necessaria per non perdere o duplicare l'evidenza, ma il req
 
 L'archivio delle sole decisioni non garantiva che ogni pagamento arrivasse al database: gli eventi pending, late o bloccati prima della decisione restavano nel log Kafka. Aggiunto quindi un consumer indipendente che conserva in ClickHouse i byte originali, le coordinate e gli header senza dipendere da Flink o dal registry. Il commit segue la persistenza del relativo chunk. Il test di guasto verifica archivio e offset con Flink fermo, ClickHouse temporaneamente indisponibile e registry fermo durante il recupero.
 
-Ridotte le materializzazioni in memoria: feature calcolate in un passaggio sullo storico letto come iteratore, lookup diretto del dispositivo, batch limitati per byte e digest di replay incrementale per partizione. Le query della dashboard hanno limiti di memoria e spill su disco; solo il percentile operativo passa a una stima, mentre conteggi, importi e identità rimangono esatti. Non è una certificazione di capacità: restano il costo delle scansioni per cliente, i bucket JSON allo stesso timestamp e le viste SQL di integrità sullo storico.
+Ridotte le materializzazioni in memoria: pending individuali, feature incrementali esatte per storie dense, indici di scadenza, lookup diretto del dispositivo, batch limitati per byte/righe/età e digest di replay incrementale per partizione. Le storie piccole continuano a usare il calcolo di riferimento; cambiare tipo, valuta o finestra di una regola ricostruisce il relativo aggregato dallo storico conservato. Le query della dashboard hanno limiti di memoria e spill su disco; solo il percentile operativo usa una stima, mentre conteggi, importi e identità rimangono esatti. Restano la materializzazione e l'ordinamento di un singolo gruppo con uguale timestamp alla finalizzazione, il limite di una subtask per cliente e le viste SQL di integrità sullo storico. I benchmark del 12 ottobre misurano miglioramenti e regressioni, non certificano capacità di produzione.
 
 Per nuovi topic di ingresso, la retention automatica per tempo e dimensione è disabilitata. Ciò evita che una lunga indisponibilità del DB elimini input non archiviati, ma richiede gestione dello spazio e una futura politica di cancellazione basata sulla copertura verificata e sul ripristino Flink. Non è una soluzione di storage infinito. I topic esistenti richiedono un aggiornamento esplicito; nessun intervento ricostruisce dati già scaduti. I consumer non avanzano silenziosamente oltre offset non più disponibili. Replica, backup e comportamento del produttore rimangono parte del contratto di assenza di perdita.
 

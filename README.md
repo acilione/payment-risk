@@ -239,7 +239,9 @@ The implementation separates state management, calculation and storage:
 
 | Component | Responsibility |
 |---|---|
-| `CustomerRiskProcessor` / `StateHistory` | Manage customer state, timers, policy snapshots and iteration over stored history. |
+| `CustomerRiskProcessor` / `StateHistory` | Coordinate customer state, timers, policy snapshots and iteration over stored history. |
+| `PendingPayments` | Store pending payments individually and drain them in timestamp and event-ID order. |
+| `RollingFeatures` / `StateExpiryIndex` | Maintain exact rolling observations for dense histories and index history/device expiration. |
 | `RiskFeatures` / `RiskEngine` | Calculate observations, scores and explanations without storage calls. |
 | `PaymentArchiver` / `DecisionMaterializer` | Persist original inputs independently of assessments and invalid/late outcomes. |
 | `KafkaIngestion` / `DurableKafkaBatch` / `ClickHouseWriter` | Configure consumers, bound batches, coordinate offset commits and retry database writes. |
@@ -315,6 +317,8 @@ The processor keeps the following keyed state in embedded RocksDB:
 | Pending payments | Individual records containing complete payments, rule snapshots and a link to the preceding record at that timestamp. | Until evaluation; at most 100,000 pending events per customer. |
 | Payment history | Timestamp buckets containing event time, amount, currency, device, and status. | One hour of event time; at most 100,000 retained events per customer. |
 | Devices | Device ID to last evaluated event timestamp. | Thirty days of event time; at most 10,000 devices per customer. |
+| Rolling features | Per-rule window position, counts, sums and device reference counts for dense histories. | Rule windows within retained history; cleared when history and pending payments are empty. |
+| Expiry indexes | Timestamp-indexed references to history buckets and device entries. | Removed as the corresponding state expires or its expiry changes. |
 
 [RollingFeatures](src/main/java/com/portfolio/paymentrisk/processor/RollingFeatures.java) maintains exact counts, integer sums, decline counts and device reference counts once a customer has at least 64 retained payments. Smaller histories use the reference history calculation to avoid the extra state overhead. Once enabled, incremental state remains active until retained history and pending payments are empty. A changed rule type, currency or window rebuilds that rule's aggregate from retained history; ordinary evaluations do not scan that history. Disabled rules still retain their observations for audit evidence.
 
@@ -657,7 +661,7 @@ npm --prefix web run preview
 
 ## Configuration
 
-Application settings are parsed and validated by [AppConfig.java](src/main/java/com/portfolio/paymentrisk/config/AppConfig.java). Flink runtime settings are in [Compose](docker-compose.yml) and the [Helm chart](infrastructure/helm/payment-risk/templates/deployment.yaml). Keep secrets in the generated local environment file or an environment-managed Secret.
+Job settings are parsed and validated by [AppConfig.java](src/main/java/com/portfolio/paymentrisk/config/AppConfig.java). The database consumers read their batch and polling limits through [BatchLimits.java](src/main/java/com/portfolio/paymentrisk/storage/BatchLimits.java) and [KafkaIngestion.java](src/main/java/com/portfolio/paymentrisk/storage/KafkaIngestion.java). Flink runtime settings are in [Compose](docker-compose.yml) and the [Helm chart](infrastructure/helm/payment-risk/templates/deployment.yaml). Keep secrets in the generated local environment file or an environment-managed Secret.
 
 | Variable | Default or requirement |
 |---|---|
@@ -679,6 +683,10 @@ Application settings are parsed and validated by [AppConfig.java](src/main/java/
 | `CLICKHOUSE_URL` / `CLICKHOUSE_USER` | `http://localhost:28123` / `risk`; Compose supplies the internal URL |
 | `CLICKHOUSE_PASSWORD` | Required secret |
 | `MATERIALIZER_GROUP` / `ARCHIVER_GROUP` | `risk-clickhouse-evaluations-v2` / `risk-payment-archive-v1` |
+| `INGEST_BATCH_BYTES` | `1048576` (1 MiB); allowed range 1–67108864 bytes. A larger single row is preserved in its own batch. |
+| `INGEST_BATCH_ROWS` | `1000`; allowed range 1–10000 rows |
+| `INGEST_BATCH_MS` | `1000`; allowed range 1–10000 ms. Batch age is checked when adding a row; this is not a database request deadline. |
+| `INGEST_MAX_POLL_RECORDS` | `250`; allowed range 1–10000 records. Remaining rows are flushed at the end of each poll. |
 | `MATERIALIZER_METRICS_PORT` / `ARCHIVER_METRICS_PORT` | `9405` / `9406`; internal metrics and readiness endpoints |
 | `POLICY_FILE` / `POLICY_CATALOG_JSON` | Mutually exclusive; a catalog is required outside local mode |
 | `POLICY_SHA256` | Optional exact-content checksum; required by Helm |
@@ -871,8 +879,11 @@ Labels and expected scores stay outside the engine's inputs. Histories cover twe
 | [RiskEngineTest](src/test/java/com/portfolio/paymentrisk/RiskEngineTest.java) | Calls the pure evaluator with controlled history to check all five rules, exact window boundaries, score thresholds, disabled rules, currency handling, fingerprints, and a single pass over 100,000 generated history rows. |
 | [ProductionSafetyTest](src/test/java/com/portfolio/paymentrisk/ProductionSafetyTest.java) | Checks evaluation identity, audit Avro roundtrip, policy validation, DLQ privacy, lost insert responses, exhausted retries, quarantine failure without commit and durable incident monitoring. |
 | [CustomerSimulationTest](src/test/java/com/portfolio/paymentrisk/CustomerSimulationTest.java) | Runs the customer stories through a Flink operator harness and checks scores, false alarms, misses and input/output reconciliation. |
-| [BoundedIngestionTest](src/test/java/com/portfolio/paymentrisk/BoundedIngestionTest.java) | Checks byte-bounded commits, failed inserts, binary/null preservation, replay digests and retention gaps. |
-| [StateOperatorsTest](src/test/java/com/portfolio/paymentrisk/StateOperatorsTest.java) | Uses Flink operator test harnesses to advance watermarks and processing time, snapshot/restore managed state, and check ordering, late output, rule snapshots, cleanup, idleness, and deduplication TTL. |
+| [BoundedIngestionTest](src/test/java/com/portfolio/paymentrisk/BoundedIngestionTest.java) | Checks byte, row and age bounds, commits only covered offsets, failed inserts, oversized rows, binary/null preservation, replay digests and retention gaps. |
+| [StateOperatorsTest](src/test/java/com/portfolio/paymentrisk/StateOperatorsTest.java) | Uses Flink operator test harnesses to advance watermarks and processing time, snapshot/restore managed state, and check ordering, late output, rule snapshots, cleanup, idleness, and deduplication TTL. Compares incremental feature evidence with the reference evaluator across rule and window changes. |
+| [StateMigrationTest](src/test/java/com/portfolio/paymentrisk/StateMigrationTest.java) | Restores legacy pending, history and device state, mixes old and new pending records, and verifies complete expiration. |
+| [GeneratedPaymentsTest](src/test/java/com/portfolio/paymentrisk/GeneratedPaymentsTest.java) | Checks seeded generation, scenario behavior, retries and configuration validation. |
+| [Showcase tests](scripts/test_showcase.py) / [pipeline benchmark tests](scripts/test_pipeline_benchmark.py) | Check reconciliation and benchmark reporting, including failure cases. |
 | [SourceValidationTest](src/test/java/com/portfolio/paymentrisk/SourceValidationTest.java) | Checks validation before source watermark assignment, preservation of source metadata, and propagation of registry outages. |
 | [SchemaCompatibilityTest](src/test/java/com/portfolio/paymentrisk/SchemaCompatibilityTest.java) | Checks every stored historical writer schema against the current reader, Avro framing round-trips, and invalid enum rejection. |
 | [KafkaMiniClusterTest](src/test/java/com/portfolio/paymentrisk/KafkaMiniClusterTest.java) | Runs embedded Flink against real Kafka and registry services when `RUN_KAFKA_IT=true`. |
@@ -966,9 +977,9 @@ Every profile produced the expected number of distinct decisions, with exact sco
 
 A separate GitHub Actions run on four vCPUs with Java 21 produced 975 decisions/sec for small histories, slightly below the 1,000/sec exploratory target, and 68/sec for the dense-key profile. Its small-history p99 was 1.69 ms. This single run is not a controlled hardware comparison, but it prevents treating the local throughput as a guaranteed deployment rate. The small-history shortfall alone does not establish that history scans dominate the workload.
 
-The same-timestamp percentile needs particular care: most operations only admit a payment; the last one also finalizes the whole bucket. That finalization took **124–225 ms**, exceeding the declared 50 ms burst budget in all three runs. It accounted for only 2.7–3.5% of total burst processing time. The source code repeatedly decodes and rewrites the growing pending JSON bucket during admission, so changing the pending-state representation deserves investigation before optimizing only rule arithmetic.
+The same-timestamp percentile needs particular care: most operations only admit a payment; the last one also finalizes the whole bucket. That finalization took **124–225 ms**, exceeding the declared 50 ms burst budget in all three runs. It accounted for only 2.7–3.5% of total burst processing time. That version repeatedly decoded and rewrote a growing pending JSON bucket during admission. The 12 October implementation stores each pending payment separately; the comparison below measures that change together with incremental features and indexed expiration.
 
-Those measurements did not justify incremental aggregates for every customer. The current implementation therefore activates them only for denser retained histories, and stores pending payments individually. Dense keys show the expected scan cost, and one key still runs on one subtask. A workload requiring hundreds of payments per second for the same customer would need a separate capacity test and likely a different state representation. Any aggregate experiment must preserve exact `(t - window, t]` boundaries, same-timestamp ordering, policy snapshots, distinct-device counts and restore behavior. It must match full rule evidence, not just the final score.
+Those baseline measurements did not justify incremental aggregates for every customer. The current implementation activates them only for denser retained histories. One customer still runs on one subtask, so sustained traffic concentrated on a single customer needs its own capacity test. The updated operator is checked against the reference evaluator for exact `(t - window, t]` boundaries, same-timestamp ordering, policy snapshots, distinct-device counts and full rule evidence, including restoration.
 
 ### Incremental state and pending-buffer comparison
 

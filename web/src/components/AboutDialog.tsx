@@ -29,12 +29,13 @@ export function AboutDialog({
         </span>
         <h2>About Payment risk</h2>
         <p>
-          This dashboard shows payment decisions from an Apache Flink job. Use
-          it to review transaction scores, matched rules, and service status.
+          This dashboard shows risk assessments from an Apache Flink job. Use it
+          to review transaction scores, matched rules, and service status.
         </p>
         <p>
           <strong>Live mode</strong> reads data from your local services.{" "}
-          <strong>Demo mode</strong> uses sample data and does not require those
+          <strong>Demo mode</strong> includes investigations exported from a
+          verified generator run through the pipeline and does not require those
           services.
         </p>
         <a
