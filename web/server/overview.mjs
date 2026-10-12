@@ -162,7 +162,7 @@ export function createReader(
             : "No running payment-risk job detected",
         },
         {
-          name: "ClickHouse",
+          name: stored?.analytics?.store || "ClickHouse",
           status: "healthy",
           detail: "Stored payment decisions",
         },

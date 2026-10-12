@@ -81,7 +81,7 @@ export function Showcase({
           <h2>Generated payments, recorded decisions.</h2>
           <p>
             Configurable customer histories pass through Kafka, Flink and
-            ClickHouse. Explore the decisions and the evidence behind them.
+            PostgreSQL. Explore the decisions and the evidence behind them.
           </p>
         </div>
         <button
@@ -176,7 +176,7 @@ export function Showcase({
               <p className="showcase-note">
                 {demo
                   ? `${snapshot.provenance.exported_payments} decisions from ${snapshot.provenance.exported_customers} complete customer histories are included in this snapshot.`
-                  : "Open an investigation to read the stored customer history from ClickHouse."}
+                  : "Open an investigation to read the stored customer history from PostgreSQL."}
               </p>
             </section>
           </div>

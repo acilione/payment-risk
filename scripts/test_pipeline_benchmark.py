@@ -12,6 +12,46 @@ spec.loader.exec_module(benchmark)
 
 
 class PipelineBenchmarkTest(unittest.TestCase):
+    def test_task_utilization_excludes_startup_drain_and_other_jobs(self):
+        samples = []
+        for second, busy in [(0, 1000), (10, 100), (20, 150), (30, 1000)]:
+            rows = [{"metric": {"__name__": "busy", "job_id": job}, "value": [second, str(value)]}
+                    for job, value in [("current", busy), ("old", 999)]]
+            samples.append({"observed_at": f"1970-01-01T00:00:{second:02d}+00:00", "metrics": rows})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "metrics.jsonl"
+            path.write_text("\n".join(json.dumps(sample) for sample in samples))
+            result = benchmark.summarize_metrics(path, "current", 10000, 20000)
+            self.assertEqual(len(result["series"]), 1)
+            series = next(iter(result["series"].values()))
+            self.assertEqual(series["samples"], 2)
+            self.assertEqual(series["mean"], 125)
+            self.assertEqual(series["max"], 150)
+
+    def test_sustained_load_distinguishes_stability_backlog_and_driver_stalls(self):
+        from load_analysis import sustained_summary
+        with sqlite3.connect(":memory:") as db:
+            db.execute("CREATE TABLE benchmark_arrivals(id TEXT,scheduled_at INTEGER,producer_at INTEGER,stored_at INTEGER)")
+            start = 1000000
+            db.executemany("INSERT INTO benchmark_arrivals VALUES (?,?,?,?)",
+                           ((str(i), start+i*10, start+i*10, start+i*10+5000) for i in range(10000)))
+            report = {"load_mode": True, "stored_decisions": 10000, "publishing_started_at": start,
+                      "config": {"publish_rate": 100}, "achieved_payments_per_second": 100}
+            stable = sustained_summary(db, report, 20, 20)
+            self.assertEqual(stable["status"], "observed_stable")
+            self.assertEqual([500]*4, [w["offered_backlog"] for w in stable["windows"]])
+            self.assertEqual(stable["backlog_growth_per_second"], 0)
+            db.execute("UPDATE benchmark_arrivals SET stored_at=scheduled_at+(scheduled_at-?)+5000", (start,))
+            self.assertEqual(sustained_summary(db, report, 20, 20)["status"], "backlog_or_latency_growing")
+            # Even with stable storage latency after send, an overloaded producer cannot pass.
+            db.execute("UPDATE benchmark_arrivals SET producer_at=scheduled_at+5000,stored_at=scheduled_at+10000")
+            limited = sustained_summary(db, report, 20, 20)
+            self.assertEqual(limited["status"], "generator_limited")
+            self.assertEqual(limited["windows"][0]["scheduled_to_storage_p95_ms"], 10000)
+            self.assertEqual(sustained_summary(db, report, 60, 20)["status"], "insufficient_evidence")
+            db.execute("DELETE FROM benchmark_arrivals")
+            self.assertEqual(sustained_summary(db, report)["status"], "insufficient_evidence")
+
     def test_stage_latencies_cover_reconciled_payments(self):
         with sqlite3.connect(":memory:") as db:
             db.executescript("CREATE TABLE payments(id TEXT,payload TEXT,decision TEXT); CREATE TABLE inputs(partition INTEGER,offset INTEGER,event_id TEXT); CREATE TABLE acknowledgements(partition INTEGER,offset INTEGER,observed_at INTEGER);")

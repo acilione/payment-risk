@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /** Bounded retry budget stays below the consumer's five-minute max poll interval. */
-public final class ClickHouseWriter {
+public final class ClickHouseWriter implements com.portfolio.paymentrisk.storage.RowWriter {
   private final URI endpoint;
   private final String user, password;
   private final HttpClient http;

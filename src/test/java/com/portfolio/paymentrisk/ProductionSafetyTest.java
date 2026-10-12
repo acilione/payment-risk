@@ -16,6 +16,19 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 
 class ProductionSafetyTest {
+  @Test
+  void transactionFactsCannotBeChangedToBypassIdentityComparison() {
+    var output = decision(2000);
+    var record = new ConsumerRecord<String, byte[]>("decisions", 0, 1, null, new byte[0]);
+    MaterializerRows.convert(output, record);
+    output.put(
+        "transaction_facts",
+        output.path("transaction_facts").asText().replace("device", "another-device"));
+    assertThrows(IllegalArgumentException.class, () -> MaterializerRows.convert(output, record));
+    var revision = decision(2000).put("assessment_request_id", "new-id-after-restart");
+    assertThrows(IllegalArgumentException.class, () -> MaterializerRows.convert(revision, record));
+  }
+
   private ObjectNode decision(long now) {
     return RiskEngine.evaluate(
         RiskEngineTest.tx("event", 1000, 100, "device", "APPROVED"),

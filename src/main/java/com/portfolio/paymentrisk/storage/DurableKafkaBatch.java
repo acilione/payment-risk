@@ -1,6 +1,5 @@
 package com.portfolio.paymentrisk.storage;
 
-import com.portfolio.paymentrisk.tools.ClickHouseWriter;
 import com.portfolio.paymentrisk.tools.MaterializerMetrics;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +11,7 @@ import org.apache.kafka.common.TopicPartition;
 /** A byte-bounded insert unit; only offsets covered by successful writes may be committed. */
 public final class DurableKafkaBatch {
   public static final int DEFAULT_BYTES = 1_048_576;
-  private final ClickHouseWriter writer;
+  private final RowWriter writer;
   private final Consumer<Map<TopicPartition, OffsetAndMetadata>> commit;
   private final MaterializerMetrics metrics;
   private final BatchLimits limits;
@@ -23,7 +22,7 @@ public final class DurableKafkaBatch {
   private long bytes, count, rejected;
 
   public DurableKafkaBatch(
-      ClickHouseWriter writer,
+      RowWriter writer,
       Consumer<Map<TopicPartition, OffsetAndMetadata>> commit,
       MaterializerMetrics metrics,
       int limit) {
@@ -31,7 +30,7 @@ public final class DurableKafkaBatch {
   }
 
   public DurableKafkaBatch(
-      ClickHouseWriter writer,
+      RowWriter writer,
       Consumer<Map<TopicPartition, OffsetAndMetadata>> commit,
       MaterializerMetrics metrics,
       BatchLimits limits,
@@ -64,7 +63,13 @@ public final class DurableKafkaBatch {
   public void flush() throws IOException, InterruptedException {
     if (count == 0) return;
     for (var entry : rows.entrySet()) writer.insert(entry.getKey(), entry.getValue().toString());
-    commit.accept(Map.copyOf(offsets));
+    long commitStarted = clock.getAsLong();
+    try {
+      commit.accept(Map.copyOf(offsets));
+    } finally {
+      metrics.offsetCommitNanos.addAndGet(clock.getAsLong() - commitStarted);
+      metrics.offsetCommits.incrementAndGet();
+    }
     metrics.batchBytes.addAndGet(bytes);
     metrics.batchRows.addAndGet(count);
     metrics.batches.incrementAndGet();

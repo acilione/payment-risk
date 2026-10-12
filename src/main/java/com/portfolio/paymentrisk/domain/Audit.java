@@ -25,19 +25,23 @@ public final class Audit {
   }
 
   public static String canonical(JsonNode value) {
+    return Json.write(ordered(value));
+  }
+
+  private static JsonNode ordered(JsonNode value) {
     if (value.isObject()) {
       var fields = new TreeMap<String, JsonNode>();
-      value
-          .fields()
-          .forEachRemaining(e -> fields.put(e.getKey(), Json.read(canonical(e.getValue()))));
-      return Json.write(fields);
+      value.fields().forEachRemaining(e -> fields.put(e.getKey(), ordered(e.getValue())));
+      var object = Json.object();
+      fields.forEach(object::set);
+      return object;
     }
     if (value.isArray()) {
-      var items = new ArrayList<JsonNode>();
-      value.forEach(v -> items.add(Json.read(canonical(v))));
-      return Json.write(items);
+      var items = Json.MAPPER.createArrayNode();
+      value.forEach(v -> items.add(ordered(v)));
+      return items;
     }
-    return Json.write(value);
+    return value;
   }
 
   // One evaluation per event, engine release and explicitly named policy release.
@@ -53,6 +57,12 @@ public final class Audit {
     return sha256(canonical(facts));
   }
 
+  public static String transactionFacts(JsonNode transaction) {
+    var facts = (com.fasterxml.jackson.databind.node.ObjectNode) transaction.deepCopy();
+    facts.remove(List.of("producer_time", "event_id"));
+    return canonical(facts);
+  }
+
   public static void attachPolicy(
       com.fasterxml.jackson.databind.node.ObjectNode result,
       JsonNode transaction,
@@ -60,6 +70,8 @@ public final class Audit {
       long version) {
     result.put("policy_id", id).put("policy_version", version);
     result.put("input_sha256", inputHash(transaction));
+    result.put("transaction_facts", transactionFacts(transaction));
+    result.put("assessment_request_id", "initial");
     result.put(
         "evaluation_id",
         evaluationId(transaction.path("event_id").asText(), ENGINE_VERSION, id, version));

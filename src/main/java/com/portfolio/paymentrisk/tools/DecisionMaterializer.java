@@ -27,8 +27,8 @@ public final class DecisionMaterializer {
             new MaterializerMetrics(
                 Integer.parseInt(
                     System.getenv().getOrDefault("MATERIALIZER_METRICS_PORT", "9405")));
-        var consumer = new KafkaConsumer<String, byte[]>(p)) {
-      var writer = KafkaIngestion.writer(c, metrics);
+        var consumer = new KafkaConsumer<String, byte[]>(p);
+        var writer = new PostgresWriter(System.getenv(), metrics)) {
       KafkaIngestion.subscribe(
           consumer,
           List.of(c.topic("risk.decisions"), c.topic("payments.dlq"), c.topic("payments.late")),
@@ -50,6 +50,7 @@ public final class DecisionMaterializer {
             throw new java.io.IOException("Decode budget exceeded; offsets remain uncommitted");
           // Registry/network outages propagate; they are not malformed payment records.
           String table, row;
+          long decodeStarted = System.nanoTime();
           try {
             if (record.topic().equals(c.topic("risk.decisions"))) {
               var decision = (ObjectNode) Json.read(codec.decode(record.value(), "risk-decision"));
@@ -71,6 +72,9 @@ public final class DecisionMaterializer {
                         record.topic().equals(c.topic("risk.decisions"))
                             ? "INVALID_DECISION"
                             : "INVALID_OUTCOME"));
+          } finally {
+            metrics.decodeNanos.addAndGet(System.nanoTime() - decodeStarted);
+            metrics.decoded.incrementAndGet();
           }
           batch.add(table, row, record);
         }

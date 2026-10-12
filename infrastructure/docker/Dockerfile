@@ -3,10 +3,11 @@ WORKDIR /build
 COPY pom.xml .
 COPY schemas schemas
 COPY src src
+COPY infrastructure/docker/postgres.sql infrastructure/docker/postgres.sql
 RUN --mount=type=cache,target=/root/.m2 --mount=type=secret,id=maven_truststore \
     if [ -f /run/secrets/maven_truststore ]; then \
       export JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=/run/secrets/maven_truststore; \
-    fi; mvn -B -DskipTests package
+    fi; mvn -B -DskipTests package && test -s target/classes/storage/postgres.sql
 
 FROM flink:2.2.1-scala_2.12-java21 AS runtime-base
 USER root

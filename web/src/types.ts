@@ -17,7 +17,12 @@ export interface Decision {
   source_offset?: number | string;
 }
 export interface Overview {
-  analytics?: { generation: string; asOf: string; publishedAt: string };
+  analytics?: {
+    generation: string;
+    asOf: string;
+    publishedAt?: string;
+    latencyStatistic?: string;
+  };
   generatedAt: string;
   window: WindowKey;
   totals: {

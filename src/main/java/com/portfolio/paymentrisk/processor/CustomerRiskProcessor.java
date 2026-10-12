@@ -32,12 +32,14 @@ public class CustomerRiskProcessor
   private transient PendingPayments queue;
   private transient StateExpiryIndex expiry;
   private transient Map<String, RiskEngine.PreparedPolicy> policyCache;
+  private transient JsonNode admissionRules;
 
   public CustomerRiskProcessor(AppConfig config) {
     this.config = config;
   }
 
   public void open(OpenContext c) {
+    admissionRules = null;
     policyCache =
         new LinkedHashMap<>(32, 0.75f, true) {
           protected boolean removeEldestEntry(Map.Entry<String, RiskEngine.PreparedPolicy> entry) {
@@ -98,7 +100,8 @@ public class CustomerRiskProcessor
   }
 
   private static int count(ValueState<Integer> s) throws Exception {
-    return s.value() == null ? 0 : s.value();
+    Integer value = s.value();
+    return value == null ? 0 : value;
   }
 
   private static void setCount(ValueState<Integer> s, int value) throws Exception {
@@ -136,6 +139,7 @@ public class CustomerRiskProcessor
       return;
     }
     state.put(id, value);
+    admissionRules = null;
     updates.inc();
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info("event=rule_update rule_id={} version={}", id, r.path("version").asLong());
@@ -147,7 +151,8 @@ public class CustomerRiskProcessor
     long t = tx.path("event_time").asLong(), watermark = ctx.timerService().currentWatermark();
     // Source watermarks restart from MIN_VALUE after recovery. Retained customer history
     // must never be revised behind its checkpointed evaluation frontier.
-    if (finalizedThrough.value() != null) watermark = Math.max(watermark, finalizedThrough.value());
+    Long cutoff = finalizedThrough.value();
+    if (cutoff != null) watermark = Math.max(watermark, cutoff);
     if (t <= watermark) {
       late.inc();
       ctx.output(
@@ -162,18 +167,23 @@ public class CustomerRiskProcessor
                   .put("reason", "TOO_LATE")));
       return;
     }
-    if (count(pendingCount) >= config.maxEvents())
+    int waiting = count(pendingCount);
+    if (waiting >= config.maxEvents())
       throw new IllegalStateException("Customer pending state limit exceeded");
     var item = Json.object();
     item.set("transaction", tx);
     item.put("queued_at", ctx.timerService().currentProcessingTime());
-    item.set("rules", Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES))));
+    // Immutable derived cache: rebuild from restored broadcast state after open, and
+    // invalidate on accepted updates. Every queued item still stores its own policy snapshot.
+    if (admissionRules == null)
+      admissionRules = Json.MAPPER.valueToTree(snapshot(ctx.getBroadcastState(RULES)));
+    item.set("rules", admissionRules);
     item.put("review_threshold", catalog == null ? config.review() : catalog.review());
     item.put("reject_threshold", catalog == null ? config.reject() : catalog.reject());
     item.put("policy_id", catalog == null ? "dynamic" : catalog.id());
     item.put("policy_version", catalog == null ? 0 : catalog.version());
     queue.add(t, item);
-    pendingCount.update(count(pendingCount) + 1);
+    pendingCount.update(waiting + 1);
     if (pendingSince.value() == null) {
       long now = ctx.timerService().currentProcessingTime();
       pendingSince.update(now);
@@ -207,31 +217,32 @@ public class CustomerRiskProcessor
     // Feature expirations run before deleting their source bucket, using this timer's time.
     rolling.expire(t, history);
     int[] removed = expiry.expire(t, history, devices, ctx.timerService());
-    setCount(historyCount, count(historyCount) - removed[0]);
-    setCount(deviceCount, count(deviceCount) - removed[1]);
+    int retained = count(historyCount) - removed[0];
+    int knownDevices = count(deviceCount) - removed[1];
+    int waiting = count(pendingCount);
     var bucket = queue.drain(t);
     if (bucket.isEmpty()) {
-      if (count(historyCount) == 0 && count(deviceCount) == 0 && count(pendingCount) == 0) {
+      if (removed[0] != 0) setCount(historyCount, retained);
+      if (removed[1] != 0) setCount(deviceCount, knownDevices);
+      if (retained == 0 && knownDevices == 0 && waiting == 0) {
         finalizedThrough.clear();
         expiry.clear();
       }
-      if (count(historyCount) == 0 && count(pendingCount) == 0) rolling.clear();
+      if (retained == 0 && waiting == 0) rolling.clear();
       return;
     }
     bucket.sort(Comparator.comparing(n -> n.path("transaction").path("event_id").asText()));
     var current = rows(history.get(t));
     var recent = StateHistory.read(history, t, current);
     for (var item : bucket) {
-      if (count(historyCount) >= config.maxEvents())
+      if (retained >= config.maxEvents())
         throw new IllegalStateException("Customer history state limit exceeded");
       var tx = item.path("transaction");
       String device = tx.path("device_id").asText();
       Long lastSeen = devices.get(device);
-      if (lastSeen == null && count(deviceCount) >= config.maxDevices())
+      if (lastSeen == null && knownDevices >= config.maxDevices())
         throw new IllegalStateException("Customer device state limit exceeded");
       long started = System.nanoTime();
-      var rules = new ArrayList<JsonNode>();
-      item.path("rules").forEach(rules::add);
       int review = item.path("review_threshold").asInt(config.review());
       int reject = item.path("reject_threshold").asInt(config.reject());
       // Only derived immutable policy metadata is cached; managed payment state remains
@@ -239,8 +250,14 @@ public class CustomerRiskProcessor
       String policyKey = review + ":" + reject + ":" + item.path("rules");
       var prepared =
           policyCache.computeIfAbsent(
-              policyKey, ignored -> RiskEngine.prepare(rules, review, reject));
-      boolean incremental = rolling.active() || count(historyCount) >= 64;
+              policyKey,
+              ignored -> {
+                var rules = new ArrayList<JsonNode>();
+                item.path("rules").forEach(rules::add);
+                return RiskEngine.prepare(rules, review, reject);
+              });
+      var rules = prepared.rules();
+      boolean incremental = rolling.active() || retained >= 64;
       var decision =
           RiskEngine.evaluate(
               tx,
@@ -278,15 +295,20 @@ public class CustomerRiskProcessor
                   || (cleanupAt.value() != null && cleanupAt.value() == time));
       if (incremental) rolling.add(feature, ctx.timerService());
       current.add(feature);
-      historyCount.update(count(historyCount) + 1);
-      if (lastSeen == null) deviceCount.update(count(deviceCount) + 1);
+      retained++;
+      if (lastSeen == null) knownDevices++;
       devices.put(device, t);
     }
     history.put(t, Json.write(current));
+    // A synchronous timer callback cannot be checkpointed halfway through. Persist these
+    // counters once, while keeping per-payment limit checks and device updates in order.
+    setCount(historyCount, retained);
+    setCount(deviceCount, knownDevices);
     ctx.timerService().registerEventTimeTimer(t + config.historyMs());
     finalizedThrough.update(t);
-    setCount(pendingCount, count(pendingCount) - bucket.size());
-    if (count(pendingCount) == 0) {
+    waiting -= bucket.size();
+    setCount(pendingCount, waiting);
+    if (waiting == 0) {
       if (pendingWatchdog.value() != null)
         ctx.timerService().deleteProcessingTimeTimer(pendingWatchdog.value());
       pendingWatchdog.clear();

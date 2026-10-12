@@ -174,7 +174,7 @@ export function Investigations({
                   {formatUtcDate(Date.parse(timeline.generatedAt))}
                   <br />
                   Source:{" "}
-                  {demo ? "synthetic engine fixture" : "ClickHouse decisions"}
+                  {demo ? "synthetic engine fixture" : "PostgreSQL decisions"}
                 </small>
               </section>
               {story && (

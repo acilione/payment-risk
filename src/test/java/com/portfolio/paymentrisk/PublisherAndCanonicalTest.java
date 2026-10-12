@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.portfolio.paymentrisk.domain.Audit;
 import com.portfolio.paymentrisk.tools.BoundedPaymentPublisher;
+import com.portfolio.paymentrisk.tools.ShowcaseProducer;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.producer.*;
@@ -11,6 +12,18 @@ import org.apache.kafka.common.serialization.*;
 import org.junit.jupiter.api.Test;
 
 class PublisherAndCanonicalTest {
+  @Test
+  void livePaymentsDelegatePartitionSelectionToKafka() {
+    for (String customer : List.of("alice", "customer-42", "cliente-é", "東京")) {
+      var record = ShowcaseProducer.paymentRecord("payments", customer, new byte[] {1}, true);
+      assertNull(record.partition(), "A live producer must not override Kafka's keyed partitioner");
+      assertEquals(customer, record.key());
+      assertEquals(
+          Integer.valueOf(0),
+          ShowcaseProducer.paymentRecord("payments", customer, new byte[] {1}, false).partition());
+    }
+  }
+
   @Test
   void canonicalBytesRemainCompatibleWithStoredIdentities() {
     var input = Json.read("{\"z\":[{\"b\":2,\"a\":1},null,true,\"é\"],\"a\":-12.5}");

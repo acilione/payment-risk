@@ -1,0 +1,707 @@
+{
+  "run_id": "show-755c4d34445b",
+  "status": "COMPLETE",
+  "started_at": "2026-10-12T17:45:29.868336+00:00",
+  "config": {
+    "seed": 7,
+    "customers": 40,
+    "min_payments": 7,
+    "max_payments": 10,
+    "history_minutes": 1440,
+    "publish_rate": 20,
+    "retry_percent": 10,
+    "ordinary_amount_min": 250,
+    "ordinary_amount_max": 15000,
+    "large_amount_min": 80000,
+    "large_amount_max": 150000,
+    "profiles": {
+      "normal": 45,
+      "new_device": 10,
+      "takeover": 10,
+      "card_testing": 5,
+      "low_burst": 5,
+      "trusted_device": 5,
+      "known_devices": 10,
+      "checkout_retry": 10
+    }
+  },
+  "checkpoint_interval_ms": 10000,
+  "checkpoint_min_pause_ms": 2000,
+  "source": "Kafka / Flink / PostgreSQL",
+  "source_commit": "36ef7d880c41f214211a0c27fd1b6f39eaf6bf06",
+  "source_dirty": true,
+  "updated_at": "2026-10-12T17:48:36.286210+00:00",
+  "job_id": "63bc7da3058c57ddfa94c7917977111c",
+  "recovery": {
+    "stage": "COMPLETE",
+    "started_at": "2026-10-12T17:45:58.528826+00:00",
+    "offsets_before": {
+      "archive": [
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "offsets_during": {
+      "archive": [
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 384
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 143
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 115
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 85
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 1
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "acknowledged_during_outage": 383,
+    "offsets_unchanged": true,
+    "resume_in_seconds": 0,
+    "resumed_at": "2026-10-12T17:47:08.737092+00:00",
+    "completed_at": "2026-10-12T17:48:34.382162+00:00",
+    "replay": {
+      "replay_id": "c802b339-2f86-41a3-8224-0834413afcd9",
+      "execute": true,
+      "reason": "Showcase database recovery and retry reconciliation",
+      "max_records": 100000,
+      "records_per_second": 500,
+      "records": 337,
+      "rejected": 0,
+      "status": "COMPLETE",
+      "ranges": [
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 0,
+          "start": 0,
+          "end_exclusive": 143
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 1,
+          "start": 0,
+          "end_exclusive": 115
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 2,
+          "start": 0,
+          "end_exclusive": 85
+        }
+      ],
+      "source_positions_digest_format": "partition-offsets-v2",
+      "source_positions_sha256": "dc435dee46d3fe9b91dc5d46de11221956231e9e5fe296e45202a911ad403721"
+    },
+    "offsets_after": {
+      "archive": [
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 0,
+          "committed": 384,
+          "log_end": 384
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 1
+        },
+        {
+          "topic": "show-755c4d34445b.payments",
+          "partition": 2,
+          "committed": 1,
+          "log_end": 1
+        }
+      ],
+      "decisions": [
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 0,
+          "committed": 141,
+          "log_end": 143
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 1,
+          "committed": 113,
+          "log_end": 115
+        },
+        {
+          "topic": "show-755c4d34445b.decisions",
+          "partition": 2,
+          "committed": 83,
+          "log_end": 85
+        }
+      ],
+      "invalid": [
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 0,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 1,
+          "committed": 1,
+          "log_end": 2
+        },
+        {
+          "topic": "show-755c4d34445b.dlq",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ],
+      "late": [
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 0,
+          "committed": 1,
+          "log_end": 2
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 1,
+          "committed": 0,
+          "log_end": 0
+        },
+        {
+          "topic": "show-755c4d34445b.late",
+          "partition": 2,
+          "committed": 0,
+          "log_end": 0
+        }
+      ]
+    },
+    "verification": "Consumer offsets did not advance during the outage. Every acknowledged input was archived after recovery. Replaying decisions preserved one logical assessment per evaluated payment."
+  },
+  "load_mode": false,
+  "max_in_flight": 1,
+  "payment_partitions": 1,
+  "generator_version": "customer-generator-v2",
+  "event_time_anchor": 1791827175069,
+  "expected_payments": 338,
+  "input_topic": "show-755c4d34445b.payments",
+  "decision_topic": "show-755c4d34445b.decisions",
+  "dlq_topic": "show-755c4d34445b.dlq",
+  "late_topic": "show-755c4d34445b.late",
+  "customers": [
+    {
+      "id": "show-755c4d34445b-customer-0000",
+      "profile": "checkout_retry",
+      "payments": 9,
+      "start": 1791740780122,
+      "end": 1791827168548,
+      "seed": 8346079845500723674
+    },
+    {
+      "id": "show-755c4d34445b-customer-0001",
+      "profile": "normal",
+      "payments": 9,
+      "start": 1791740782638,
+      "end": 1791827167385,
+      "seed": 7621113624420504425
+    },
+    {
+      "id": "show-755c4d34445b-customer-0002",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740796457,
+      "end": 1791827171430,
+      "seed": -2508615849655462426
+    },
+    {
+      "id": "show-755c4d34445b-customer-0003",
+      "profile": "card_testing",
+      "payments": 10,
+      "start": 1791740790648,
+      "end": 1791827172398,
+      "seed": -4476619285473380616
+    },
+    {
+      "id": "show-755c4d34445b-customer-0004",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740802017,
+      "end": 1791827172126,
+      "seed": -1797825896396501456
+    },
+    {
+      "id": "show-755c4d34445b-customer-0005",
+      "profile": "known_devices",
+      "payments": 10,
+      "start": 1791740798856,
+      "end": 1791827169097,
+      "seed": 7655978328340571165
+    },
+    {
+      "id": "show-755c4d34445b-customer-0006",
+      "profile": "normal",
+      "payments": 10,
+      "start": 1791740779463,
+      "end": 1791827170094,
+      "seed": -8163201266918191615
+    },
+    {
+      "id": "show-755c4d34445b-customer-0007",
+      "profile": "new_device",
+      "payments": 9,
+      "start": 1791740777049,
+      "end": 1791827171138,
+      "seed": 3246376524827696731
+    },
+    {
+      "id": "show-755c4d34445b-customer-0008",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740799526,
+      "end": 1791827166793,
+      "seed": 740264374230832002
+    },
+    {
+      "id": "show-755c4d34445b-customer-0009",
+      "profile": "known_devices",
+      "payments": 8,
+      "start": 1791740795011,
+      "end": 1791827169674,
+      "seed": -6570168955582090520
+    },
+    {
+      "id": "show-755c4d34445b-customer-0010",
+      "profile": "checkout_retry",
+      "payments": 10,
+      "start": 1791740775645,
+      "end": 1791827165208,
+      "seed": -7867136471058169557
+    },
+    {
+      "id": "show-755c4d34445b-customer-0011",
+      "profile": "new_device",
+      "payments": 7,
+      "start": 1791740797918,
+      "end": 1791827168420,
+      "seed": -7078458223705262782
+    },
+    {
+      "id": "show-755c4d34445b-customer-0012",
+      "profile": "takeover",
+      "payments": 9,
+      "start": 1791740776999,
+      "end": 1791827170818,
+      "seed": 8548921452456689817
+    },
+    {
+      "id": "show-755c4d34445b-customer-0013",
+      "profile": "known_devices",
+      "payments": 8,
+      "start": 1791740803130,
+      "end": 1791827172337,
+      "seed": -846969242865463370
+    },
+    {
+      "id": "show-755c4d34445b-customer-0014",
+      "profile": "known_devices",
+      "payments": 9,
+      "start": 1791740775439,
+      "end": 1791827170152,
+      "seed": -6356499985201385404
+    },
+    {
+      "id": "show-755c4d34445b-customer-0015",
+      "profile": "normal",
+      "payments": 9,
+      "start": 1791740790061,
+      "end": 1791827167710,
+      "seed": -5379379006362258325
+    },
+    {
+      "id": "show-755c4d34445b-customer-0016",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740799369,
+      "end": 1791827172593,
+      "seed": 265820088835577910
+    },
+    {
+      "id": "show-755c4d34445b-customer-0017",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740800347,
+      "end": 1791827165163,
+      "seed": 4677395499658674701
+    },
+    {
+      "id": "show-755c4d34445b-customer-0018",
+      "profile": "takeover",
+      "payments": 8,
+      "start": 1791740780041,
+      "end": 1791827168399,
+      "seed": -5615010185044486973
+    },
+    {
+      "id": "show-755c4d34445b-customer-0019",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740797225,
+      "end": 1791827166349,
+      "seed": -938973287678201223
+    },
+    {
+      "id": "show-755c4d34445b-customer-0020",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740804750,
+      "end": 1791827167168,
+      "seed": -655294797079445038
+    },
+    {
+      "id": "show-755c4d34445b-customer-0021",
+      "profile": "card_testing",
+      "payments": 8,
+      "start": 1791740803038,
+      "end": 1791827167042,
+      "seed": -383224193586209888
+    },
+    {
+      "id": "show-755c4d34445b-customer-0022",
+      "profile": "normal",
+      "payments": 9,
+      "start": 1791740780227,
+      "end": 1791827174459,
+      "seed": -1219864287711938827
+    },
+    {
+      "id": "show-755c4d34445b-customer-0023",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740782009,
+      "end": 1791827173528,
+      "seed": 6270771758972338627
+    },
+    {
+      "id": "show-755c4d34445b-customer-0024",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740777177,
+      "end": 1791827171627,
+      "seed": -7058118559151118180
+    },
+    {
+      "id": "show-755c4d34445b-customer-0025",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740803451,
+      "end": 1791827165229,
+      "seed": 7213761060293429927
+    },
+    {
+      "id": "show-755c4d34445b-customer-0026",
+      "profile": "normal",
+      "payments": 8,
+      "start": 1791740783053,
+      "end": 1791827167514,
+      "seed": -4957897957767875306
+    },
+    {
+      "id": "show-755c4d34445b-customer-0027",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740790871,
+      "end": 1791827170837,
+      "seed": 4338477287170759555
+    },
+    {
+      "id": "show-755c4d34445b-customer-0028",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740801229,
+      "end": 1791827167098,
+      "seed": -6660815235387704709
+    },
+    {
+      "id": "show-755c4d34445b-customer-0029",
+      "profile": "trusted_device",
+      "payments": 8,
+      "start": 1791740797160,
+      "end": 1791827166071,
+      "seed": -2652734002219796736
+    },
+    {
+      "id": "show-755c4d34445b-customer-0030",
+      "profile": "normal",
+      "payments": 7,
+      "start": 1791740804918,
+      "end": 1791827166500,
+      "seed": -5842767481738902790
+    },
+    {
+      "id": "show-755c4d34445b-customer-0031",
+      "profile": "takeover",
+      "payments": 9,
+      "start": 1791740803625,
+      "end": 1791827172162,
+      "seed": -4164203964939518560
+    },
+    {
+      "id": "show-755c4d34445b-customer-0032",
+      "profile": "low_burst",
+      "payments": 10,
+      "start": 1791740785044,
+      "end": 1791827165507,
+      "seed": 5443008546208266126
+    },
+    {
+      "id": "show-755c4d34445b-customer-0033",
+      "profile": "checkout_retry",
+      "payments": 8,
+      "start": 1791740776118,
+      "end": 1791827170240,
+      "seed": 4641248256575484329
+    },
+    {
+      "id": "show-755c4d34445b-customer-0034",
+      "profile": "normal",
+      "payments": 10,
+      "start": 1791740786549,
+      "end": 1791827172218,
+      "seed": 1172907462328474493
+    },
+    {
+      "id": "show-755c4d34445b-customer-0035",
+      "profile": "checkout_retry",
+      "payments": 7,
+      "start": 1791740796307,
+      "end": 1791827173002,
+      "seed": 4347672357893630546
+    },
+    {
+      "id": "show-755c4d34445b-customer-0036",
+      "profile": "new_device",
+      "payments": 9,
+      "start": 1791740784403,
+      "end": 1791827168391,
+      "seed": -8330699731265291172
+    },
+    {
+      "id": "show-755c4d34445b-customer-0037",
+      "profile": "known_devices",
+      "payments": 10,
+      "start": 1791740780233,
+      "end": 1791827165315,
+      "seed": 3259780366248698851
+    },
+    {
+      "id": "show-755c4d34445b-customer-0038",
+      "profile": "normal",
+      "payments": 10,
+      "start": 1791740775710,
+      "end": 1791827170303,
+      "seed": 1863703844690210541
+    },
+    {
+      "id": "show-755c4d34445b-customer-0039",
+      "profile": "takeover",
+      "payments": 10,
+      "start": 1791740798528,
+      "end": 1791827174619,
+      "seed": -7628818745523656662
+    }
+  ],
+  "publishing_started_at": 1791827175820,
+  "acknowledged_deliveries": 383,
+  "acknowledged_payments": 338,
+  "transport_retries": 44,
+  "control_records": 3,
+  "publishing_elapsed_ms": 16850,
+  "achieved_payments_per_second": 20.0,
+  "achieved_deliveries_per_second": 22.61127596439169,
+  "producer_elapsed_ms": 27808,
+  "archived_records": 386,
+  "stored_decisions": 337,
+  "reconciliation": {
+    "checked_at": "2026-10-12T17:48:34.381386+00:00",
+    "verified": true,
+    "scope": "Acknowledged inputs in this run; control records require archiving only",
+    "archived": 386,
+    "evaluated": 337,
+    "invalid_input_examples": [
+      {
+        "partition": 0,
+        "offset": "383",
+        "reason": "DESERIALIZATION_ERROR"
+      }
+    ],
+    "late_payment_examples": [
+      {
+        "event_id": "show-755c4d34445b-payment-late",
+        "reason": "TOO_LATE",
+        "lateness_ms": 2450
+      }
+    ],
+    "unidentified_inputs": 1,
+    "invalid_inputs": 1,
+    "invalid_payments": 0,
+    "late_payments": 1,
+    "unresolved_inputs": 0,
+    "unresolved_input_examples": [],
+    "unresolved_payment_examples": [],
+    "control_records": 3,
+    "missing_archive": 0,
+    "without_decision": 1,
+    "missing_input_examples": [],
+    "missing_payment_examples": []
+  },
+  "storage_unavailable": false,
+  "verification_store": "PostgreSQL",
+  "decision_counts": {
+    "APPROVE": 325,
+    "REVIEW": 12
+  },
+  "input_log_sha256": "a41af68355f6922671c0e631357f81f167545b547b0ee737d5ee92d913909229",
+  "verification": "Every acknowledged input archived and accounted for as evaluated, invalid, late, or a control record. Retries do not inflate logical assessments."
+}

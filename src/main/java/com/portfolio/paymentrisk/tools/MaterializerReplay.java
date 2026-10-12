@@ -82,17 +82,7 @@ public final class MaterializerReplay {
       }
       Files.writeString(audit, Json.write(report));
       var codec = new AvroCodec(c.registry());
-      String endpoint = System.getenv().getOrDefault("CLICKHOUSE_URL", "http://localhost:28123");
-      if (execute && !c.environment().equals("local") && !endpoint.startsWith("https://"))
-        throw new IllegalArgumentException("ClickHouse TLS required");
-      var writer =
-          execute
-              ? new ClickHouseWriter(
-                  endpoint,
-                  System.getenv().getOrDefault("CLICKHOUSE_USER", "risk"),
-                  Objects.requireNonNull(System.getenv("CLICKHOUSE_PASSWORD")),
-                  metrics)
-              : null;
+      var writer = execute ? new PostgresWriter(System.getenv(), metrics) : null;
       long records = 0, rejected = 0;
       var positions = new SourcePositionDigest();
       report.put("source_positions_digest_format", "partition-offsets-v2");
@@ -143,6 +133,7 @@ public final class MaterializerReplay {
         Files.writeString(audit, Json.write(report));
       }
       report.put("source_positions_sha256", positions.finish());
+      if (writer != null) writer.close();
       report.put("status", "COMPLETE");
     } catch (Exception e) {
       report.put("status", "FAILED").put("failure_type", e.getClass().getSimpleName());

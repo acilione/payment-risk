@@ -54,7 +54,7 @@ dashboards:
 migrate-analytics:
 	python3 scripts/apply-analytics-schema.py
 website:
-	docker compose up -d --build --no-deps website analytics-publisher
+	docker compose up -d --build --no-deps website
 website-check:
 	npm --prefix web ci
 	npm --prefix web test

@@ -25,6 +25,10 @@ x-app-env: &app-env
   CLICKHOUSE_URL: http://clickhouse:8123
   CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
   CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
+  RISK_JDBC_URL: jdbc:postgresql://risk-db:5432/risk
+  RISK_DB_USER: risk
+  RISK_DB_PASSWORD: ${RISK_DB_PASSWORD:?Run python3 scripts/init-env.py}
+  PAYMENT_SOURCE_SYSTEM: ${PAYMENT_SOURCE_SYSTEM:-payment-risk}
 
 x-flink: &flink
   logging: *logging
@@ -38,15 +42,15 @@ x-flink: &flink
     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Run python3 scripts/init-env.py}
     FLINK_PROPERTIES: |
       jobmanager.rpc.address: jobmanager
-      parallelism.default: 2
-      taskmanager.numberOfTaskSlots: 2
+      parallelism.default: ${FLINK_PARALLELISM:-2}
+      taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-2}
       jobmanager.memory.process.size: 1600m
       taskmanager.memory.process.size: 2048m
       state.backend.type: rocksdb
       state.backend.incremental: true
-      execution.checkpointing.interval: 10s
+      execution.checkpointing.interval: ${FLINK_CHECKPOINT_INTERVAL_MS:-10000} ms
       execution.checkpointing.timeout: 2min
-      execution.checkpointing.min-pause: 2s
+      execution.checkpointing.min-pause: ${FLINK_CHECKPOINT_MIN_PAUSE_MS:-2000} ms
       execution.checkpointing.max-concurrent-checkpoints: 1
       execution.checkpointing.mode: EXACTLY_ONCE
       execution.checkpointing.storage: filesystem
@@ -68,6 +72,15 @@ x-flink: &flink
       condition: service_completed_successfully
 
 services:
+  load-generator:
+    profiles: [tools]
+    image: payment-risk:0.1.0
+    environment: *app-env
+    logging: *logging
+    cpus: 1
+    mem_limit: 512m
+    entrypoint: [java, -Xmx256m, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.ShowcaseProducer]
+
   website:
     logging: *logging
     image: payment-risk-website:0.1.0
@@ -78,7 +91,12 @@ services:
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-risk}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Run python3 scripts/init-env.py}
-      ANALYTICS_MODE: snapshot
+      ANALYTICS_MODE: postgres
+      PGHOST: risk-db
+      PGPORT: 5432
+      PGDATABASE: risk
+      PGUSER: risk
+      PGPASSWORD: ${RISK_DB_PASSWORD:?Run python3 scripts/init-env.py}
       FLINK_REST_URL: http://jobmanager:8081
       PROMETHEUS_URL: http://prometheus:9090
     ports: ['127.0.0.1:23001:23002']
@@ -93,6 +111,7 @@ services:
       timeout: 5s
       retries: 3
   analytics-publisher:
+    profiles: [legacy-analytics]
     logging: *logging
     image: payment-risk-website:0.1.0
     build: {context: ./web}
@@ -145,6 +164,26 @@ services:
       test: [CMD-SHELL, 'pg_isready -U registry -d registry']
       interval: 5s
       retries: 20
+  risk-db:
+    logging: *logging
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: risk
+      POSTGRES_USER: risk
+      POSTGRES_PASSWORD: ${RISK_DB_PASSWORD:?Run python3 scripts/init-env.py}
+    volumes: [risk-data:/var/lib/postgresql, './infrastructure/docker/postgres.sql:/docker-entrypoint-initdb.d/001-risk.sql:ro']
+    ports: ['127.0.0.1:25432:5432']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U risk -d risk']
+      interval: 5s
+      retries: 20
+  projection-bootstrap:
+    logging: *logging
+    image: payment-risk:0.1.0
+    environment: *app-env
+    entrypoint: [java, -cp, /opt/flink/usrlib/risk-engine.jar, com.portfolio.paymentrisk.tools.ProjectionBootstrap]
+    depends_on:
+      risk-db: {condition: service_healthy}
   registry:
     logging: *logging
     image: apicurio/apicurio-registry:3.3.2
@@ -240,7 +279,7 @@ services:
     restart: unless-stopped
     depends_on:
       bootstrap: {condition: service_completed_successfully}
-      clickhouse: {condition: service_healthy}
+      projection-bootstrap: {condition: service_completed_successfully}
   payment-archiver:
     logging: *logging
     image: payment-risk:0.1.0
@@ -265,6 +304,7 @@ services:
     ports: ['127.0.0.1:23000:3000']
 
 volumes:
+  risk-data:
   kafka-data:
   registry-data:
   minio-data:

@@ -30,6 +30,11 @@
   </dependencyManagement>
   <dependencies>
     <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.14</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.flink</groupId>
       <artifactId>flink-connector-base</artifactId>
       <version>${flink.version}</version>
@@ -97,6 +102,11 @@
   <build>
     <finalName>risk-engine</finalName>
     <resources>
+      <resource>
+        <directory>infrastructure/docker</directory>
+        <targetPath>storage</targetPath>
+        <includes><include>postgres.sql</include></includes>
+      </resource>
       <resource>
         <directory>src/main/resources</directory>
       </resource>
