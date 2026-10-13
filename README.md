@@ -670,12 +670,70 @@ node --env-file=.env scripts/benchmark-projection-writers.mjs
 
 The script uses isolated temporary databases, 250-row batches and 9,000 fixture-derived assessments across 999 customers per trial. Each customer stays on one source partition. It runs one and three writers in both orders and verifies assessment and summary counts. The [writer comparison](docs/evidence/projection-writers.json) measured 685-757 assessments/second with one writer and 729-778 with three; the concurrent trials observed blocked writers in most lock samples. These short local trials identify contention, not production capacity. Sharding summary counters or combining their updates within each accepted batch should precede further writer scaling, while preserving atomic identity checks and summary updates.
 
+### Direct Kafka ingestion with ClickHouse
+
+The experimental [benchmark stack](docker-compose.clickhouse-benchmark.yml) removes the custom materializer from the analytical ingestion path:
+
+```text
+Committed Kafka decisions -> official ClickHouse Kafka Connect sink
+                          -> assessment deliveries -> incremental materialized view -> totals
+```
+
+The connector decodes the existing Avro schema, including rule evidence, and adds Kafka topic, partition and offset fields. A `ReplicatedMergeTree` stores deliveries. An incremental materialized view updates counts, amounts and score sums by ten-second event-time bucket, risk label and currency. Overview queries read those small aggregate tables. They do not rebuild summaries from historical assessments.
+
+The experiment pins ClickHouse 26.8.2.7, the official sink 1.7.0 and Kafka Connect 8.2.1. The sink uses `read_committed`, synchronous inserts, Keeper-backed exactly-once state and insertion deduplication for dependent views. Its retry window retains at most 10,000 block identities for up to one hour. Database identities and Kafka consumer groups are isolated per test. The application dashboard continues to use PostgreSQL while this alternative is evaluated.
+
+To reproduce, first complete the [showcase walkthrough](#showcase-walkthrough), leaving its Kafka and schema registry running. Build the application image from this branch, then start the isolated services:
+
+```bash
+docker build -t payment-risk:0.1.0 -f infrastructure/docker/Dockerfile .
+docker compose --env-file .env -f docker-compose.clickhouse-benchmark.yml \
+  up -d --build keeper benchmark-clickhouse benchmark-postgres connect
+
+# Uses the decision topic in artifacts/showcase/latest.json.
+python3 scripts/benchmark-clickhouse-kafka.py \
+  --records 100000 \
+  --postgres --rates 500,2000,5000 --seconds 60 --recovery --duplicates
+
+# Stop only the experiment; retained volumes keep its evidence.
+docker compose --env-file .env -f docker-compose.clickhouse-benchmark.yml stop
+```
+
+The default source network is `payment-risk-showcase_default`; override `BENCHMARK_SOURCE_NETWORK` for another Compose network. Host ports are 38083 for Connect, 38123 for ClickHouse and 35432 for PostgreSQL. Allow roughly 6 GiB of additional memory and sufficient **host-disk** space for the connector image, Kafka records, database volumes and build cache. Free space reported inside a virtual disk may exceed what its host can allocate.
+
+The [driver](scripts/benchmark-clickhouse-kafka.py) samples at most 128 committed Flink decisions per source partition, assigns new transaction/customer identities, recalculates audit hashes, and publishes bounded batches with Kafka's normal customer-key partitioning. It preserves the sampled scores and evidence: this measures storage ingestion, not a new fraud simulation or Flink processing latency. A report records the actual label distribution, producer rate and scheduling delay. Progress reads table metadata or indexed topic totals; final reconciliation scans only each isolated test table to check unique delivery coordinates, contiguous offsets, counts, amounts and scores against the producer report.
+
+The [measured results](docs/evidence/clickhouse-kafka-ingestion.json) used three Kafka partitions, one CPU for the ingestion worker, two CPUs and 2 GiB for each database, and a separate single-node Keeper. One finite 100,000-record backlog was read by each configuration:
+
+| Storage path | Tasks | Records/second, including startup |
+| ------------ | ----: | -------------------------------: |
+| PostgreSQL acceptance materializer | 1 | 794 |
+| Official connector, raw ClickHouse table | 1 | 2,383 |
+| Official connector and incremental view | 1 | 2,801 |
+| Official connector and incremental view | 3 | 3,735 |
+
+These are single trials in table order; cache warmup and startup affect the comparison. PostgreSQL also validates business identity/content and maintains additional read models, so the paths perform different work. The sample contained only `APPROVE` assessments. In the three-task case, the overview query read **5 aggregate rows instead of 100,000 raw rows** and returned the same totals.
+
+With three connector tasks, 60-second live trials completed at actual rates of approximately 500 and 2,000 records/second. Measured publication-to-insert p95 was 0.99 and 1.10 seconds, respectively. At 5,000/second, two one-CPU trials accumulated backlog: the repeat reached a conservative observed backlog of at least 34,428 records, with p95 9.31 seconds and another 6.14 seconds to finish draining after the producer returned. All completed trials reconciled exactly. Giving Connect two CPUs did not establish an improvement: backlog still grew and the generator's p95 scheduling delay reached 3.07 seconds. Set `BENCHMARK_CONNECT_CPUS=2` when starting the stack to repeat that variation.
+
+These short runs identify useful operating points and an overloaded setting; they do not establish maximum sustainable throughput. The shared host also showed wall-clock drift relative to monotonic producer timing, so timestamp-based latency is exploratory. Each sustained case includes one bootstrap record, excluded from the offered rate and latency calculation. Full counts, offsets, acknowledgement samples and storage observations are retained in the evidence.
+
+The new-offset retry test sent 1,000 repeated evaluations, 1,000 retries with changed event/evaluation IDs, and 10 conflicting scores. ClickHouse stored **102,010 deliveries and counted all of them**. PostgreSQL retained **100,000 assessments**, recorded all deliveries, and raised **10 integrity incidents**.
+
+Exactly-once delivery does **not** establish business uniqueness. A payment republished at a new Kafka offset is a new delivery, even if its transaction ID is unchanged. An additive materialized view counts it again; later row replacement would not retract that contribution. The connector also does not perform the application's conflicting-assessment checks. Reliable payment totals therefore require an authoritative, durably deduplicated stream before this analytical path, or a correction-aware aggregation design. This experiment does not justify removing that acceptance boundary.
+
+A process-kill test initially stopped on a saved-state mismatch: ClickHouse had stored batches beyond Kafka's last committed offset. Enabling `tolerateStateMismatch` and restarting failed tasks recovered all 100,000 rows with correct totals. A second kill, with that setting already enabled, stopped on a different `BEFORE_PROCESSING` offset-range mismatch. **Automatic crash recovery did not pass qualification.** The driver records this failure, completes the other cases and exits unsuccessfully; it does not advance offsets to hide the failure.
+
+Keeper and the target table must represent the same retained history. Never clear or partially restore a table while retaining its old connector progress. After target-data loss, rebuild the target, consumer group and Keeper namespace together from retained Kafka records or a consistent backup. Local single-node Keeper and a single ClickHouse replica do not qualify database failover or disk-loss recovery.
+
+References: [official connector configuration and guarantees](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/kafka-clickhouse-connect-sink), [incremental materialized views](https://clickhouse.com/docs/concepts/features/materialized-views/incremental-materialized-view), and [insert retry deduplication](https://clickhouse.com/docs/concepts/features/operations/insert/deduplicating-inserts-on-retries).
+
 ### Remaining limits
 
 - PostgreSQL prevents duplicate stored assessments permanently while identities are retained. Flink's input deduplication remains bounded by its processing-time TTL. Arbitrary historical resubmission into live state is not supported; a durable acceptance service before Flink is needed if the source cannot honor that contract.
 - Initial assessment conflicts require review. Reassessment promotion, corrections and lifecycle events are deliberately rejected rather than silently changing totals.
 - Summary updates contend on shared rows under concentrated traffic. The writer experiment covers short local concurrency; sustained ingestion, growing customer cardinality and database failover require further load tests. Customer snapshot versions and delivery evidence have no automatic retention policy.
-- ClickHouse analytical export is not implemented in this branch. Add it only if measured analytical queries justify it; use replay-safe versioned aggregates rather than additive retry-prone deliveries.
+- The direct ClickHouse ingestion experiment measures delivery analytics. Export from the authoritative PostgreSQL acceptance boundary and correction-aware business aggregates are not implemented.
 - Local services use single database and broker instances. Replication, backups and restore procedures need deployment-specific verification.
 
 ### Research applied

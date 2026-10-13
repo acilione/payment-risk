@@ -17,6 +17,28 @@ import org.junit.jupiter.api.Test;
 
 class ProductionSafetyTest {
   @Test
+  void sinkBenchmarkPreservesBusinessIdentityAcrossDeliveryVariants() {
+    var template = decision(2000);
+    var initial = SinkBenchmarkProducer.assessment(template, "bench", 1, "initial");
+    var retry = SinkBenchmarkProducer.assessment(template, "bench", 1, "retry");
+    var newEvent = SinkBenchmarkProducer.assessment(template, "bench", 1, "new-event");
+    var conflict = SinkBenchmarkProducer.assessment(template, "bench", 1, "conflict");
+    var record = new ConsumerRecord<String, byte[]>("decisions", 0, 1, null, new byte[0]);
+    for (var row : List.of(initial, retry, newEvent, conflict)) {
+      MaterializerRows.convert(row, record);
+      assertEquals(initial.path("transaction_facts"), row.path("transaction_facts"));
+      assertEquals(initial.path("transaction_id"), row.path("transaction_id"));
+    }
+    assertEquals(initial.path("evaluation_id"), retry.path("evaluation_id"));
+    assertEquals(initial.path("input_sha256"), retry.path("input_sha256"));
+    assertNotEquals(initial.path("evaluation_id"), newEvent.path("evaluation_id"));
+    assertNotEquals(initial.path("input_sha256"), newEvent.path("input_sha256"));
+    assertEquals(initial.path("evaluation_id"), conflict.path("evaluation_id"));
+    assertNotEquals(initial.path("risk_score"), conflict.path("risk_score"));
+    assertNotEquals(template.path("transaction_id"), initial.path("transaction_id"));
+  }
+
+  @Test
   void transactionFactsCannotBeChangedToBypassIdentityComparison() {
     var output = decision(2000);
     var record = new ConsumerRecord<String, byte[]>("decisions", 0, 1, null, new byte[0]);

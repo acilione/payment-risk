@@ -1,0 +1,9 @@
+<clickhouse>
+  <logger><level>warning</level></logger>
+  <zookeeper><node><host>keeper</host><port>9181</port></node></zookeeper>
+  <keeper_map_path_prefix>/benchmark/connector_state</keeper_map_path_prefix>
+  <max_server_memory_usage>1610612736</max_server_memory_usage>
+  <background_pool_size>8</background_pool_size>
+  <background_schedule_pool_size>16</background_schedule_pool_size>
+  <merge_tree><number_of_free_entries_in_pool_to_execute_mutation>4</number_of_free_entries_in_pool_to_execute_mutation><number_of_free_entries_in_pool_to_execute_optimize_entire_partition>4</number_of_free_entries_in_pool_to_execute_optimize_entire_partition></merge_tree>
+</clickhouse>
