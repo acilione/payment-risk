@@ -1,0 +1,772 @@
+{
+  "scope": "End-to-end generated payments, Flink evaluation and direct ClickHouse ingestion with incremental materialized views",
+  "limitations": [
+    "Shared-host wall-clock drift invalidates sustained-rate and latency qualification. Raw timing observations are retained for diagnosis.",
+    "Reference shares scoring rules with production and independently reconstructs features from bounded per-customer history. This tests implementation consistency, not real-world fraud accuracy.",
+    "Flink worker failure was injected; ClickHouse connector and database were not restarted in these trials.",
+    "No PostgreSQL acceptance materializer or archival service ran. Input durability was checked by Kafka source coordinates and wire hashes, not an external archive.",
+    "Default rules, at most 100 payments per customer, bounded deduplication horizon and three partitions. These trials do not prove permanent business uniqueness or bank-scale capacity."
+  ],
+  "cases": [
+    {
+      "run_id": "show-dc5cca561fb8",
+      "status": "COMPLETE",
+      "config": {
+        "seed": 7,
+        "customers": 40,
+        "min_payments": 7,
+        "max_payments": 10,
+        "history_minutes": 1440,
+        "publish_rate": 20,
+        "retry_percent": 10,
+        "ordinary_amount_min": 250,
+        "ordinary_amount_max": 15000,
+        "large_amount_min": 80000,
+        "large_amount_max": 150000,
+        "profiles": {
+          "normal": 45,
+          "new_device": 10,
+          "takeover": 10,
+          "card_testing": 5,
+          "low_burst": 5,
+          "trusted_device": 5,
+          "known_devices": 10,
+          "checkout_retry": 10
+        }
+      },
+      "arguments": {
+        "rate": 200,
+        "duration_seconds": 110,
+        "historical": true,
+        "restart_flink": false
+      },
+      "source_commit": "2a75849bf55b4b23c435893e266d0f17ed9ba0ad",
+      "expected_payments": 338,
+      "publishing_started_at": 1791891308658,
+      "publishing_elapsed_ms": 16850,
+      "achieved_payments_per_second": 20.0,
+      "producer_elapsed_ms": 32637,
+      "transport_retries": 44,
+      "control_records": 3,
+      "checkpoint_configuration": {
+        "mode": "exactly_once",
+        "interval": 10000,
+        "timeout": 120000,
+        "min_pause": 2000,
+        "max_concurrent": 1,
+        "externalization": {
+          "enabled": true,
+          "delete_on_cancellation": false
+        },
+        "state_backend": "EmbeddedRocksDBStateBackend",
+        "checkpoint_storage": "FileSystemCheckpointStorage",
+        "unaligned_checkpoints": false,
+        "tolerable_failed_checkpoints": 0,
+        "aligned_checkpoint_timeout": 0,
+        "checkpoints_after_tasks_finish": true,
+        "state_changelog_enabled": false,
+        "changelog_periodic_materialization_interval": 600000,
+        "changelog_storage": "memory"
+      },
+      "verification": {
+        "reference": {
+          "verified": true,
+          "assessments": 337,
+          "maximum_retained_customer_payments": 100,
+          "labels": {
+            "APPROVE": 325,
+            "REVIEW": 12
+          }
+        },
+        "latency": {
+          "evaluation_ms": {
+            "p50": 19144,
+            "p95": 26647,
+            "p99": 27124
+          },
+          "storage_ms": {
+            "p50": 5285,
+            "p95": 5404,
+            "p99": 5420
+          },
+          "total_ms": {
+            "p50": 24456,
+            "p95": 32005,
+            "p99": 32544
+          }
+        },
+        "invalid": 1,
+        "late": 1,
+        "input_wire_hashes": 386,
+        "unique_kafka_deliveries": 339,
+        "incremental_totals": {
+          "payments": 337,
+          "amount_minor": 3475092,
+          "risk_score_sum": 395
+        },
+        "steady_load": {
+          "status": "insufficient_evidence",
+          "scope": "Offered payments to durable assessments; excludes warmup and post-publication drain",
+          "warmup_seconds": 30,
+          "window_seconds": 20,
+          "windows": [],
+          "reason": "Complete offered-schedule coverage requires the live-load producer"
+        },
+        "verified_aggregate_buckets": 250,
+        "timing": {
+          "status": "no_detected_clock_error",
+          "wall_advance_lower_bound_ms": null,
+          "negative_stage_durations": 0,
+          "scope": "One-sided clock consistency check, not proof of synchronization"
+        },
+        "exact_expected_event_set": true
+      },
+      "post_run_analysis": {
+        "description": "Clock consistency, exact event-set comparison and per-bucket MV reconciliation from retained evidence; no new load trial",
+        "script_sha256": "7c48204ed911c9724b80f377f6df060337ef9f9e0bed09bf7bec6137f1184a9f"
+      },
+      "checkpoint_counts": {
+        "restored": 0,
+        "total": 5,
+        "in_progress": 0,
+        "completed": 5,
+        "failed": 0
+      },
+      "checkpoint_duration_ms": {
+        "min": 176,
+        "max": 705,
+        "avg": 414,
+        "p50": 356.0,
+        "p90": 705.0,
+        "p95": 705.0,
+        "p99": 705.0,
+        "p999": 705.0
+      },
+      "operators": [
+        {
+          "name": "Source: show-dc5cca561fb8.payments -> validate-payments",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "Source: show-dc5cca561fb8.rules -> validate-rules -> Timestamps/Watermarks",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "deduplicate",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "validate-transaction-identity",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "customer-risk -> (show-dc5cca561fb8.decisions: Writer -> show-dc5cca561fb8.decisions: Committer, show-dc5cca561fb8.late: Writer -> show-dc5cca561fb8.late: Committer)",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "show-dc5cca561fb8.dlq: Writer -> show-dc5cca561fb8.dlq: Committer",
+          "parallelism": 3,
+          "status": "RUNNING"
+        }
+      ]
+    },
+    {
+      "run_id": "show-d38208f8f504",
+      "status": "COMPLETE",
+      "config": {
+        "seed": 7,
+        "customers": 220,
+        "min_payments": 100,
+        "max_payments": 100,
+        "history_minutes": 1440,
+        "publish_rate": 200,
+        "retry_percent": 10,
+        "ordinary_amount_min": 250,
+        "ordinary_amount_max": 15000,
+        "large_amount_min": 80000,
+        "large_amount_max": 150000,
+        "profiles": {
+          "normal": 45,
+          "new_device": 10,
+          "takeover": 10,
+          "card_testing": 5,
+          "low_burst": 5,
+          "trusted_device": 5,
+          "known_devices": 10,
+          "checkout_retry": 10
+        }
+      },
+      "arguments": {
+        "rate": 200,
+        "duration_seconds": 110,
+        "historical": false,
+        "restart_flink": false
+      },
+      "source_commit": "2a75849bf55b4b23c435893e266d0f17ed9ba0ad",
+      "source_dirty": true,
+      "source_sha256": {
+        "src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java": "64d8997bfbc520c8322f8538d5edd26e2fd70811abffb7e5a83344ea82e5c951",
+        "src/main/java/com/portfolio/paymentrisk/Json.java": "bb88e6378ef41a60a3df71de5e8481c99aefb557fe29f72973f5f9a1b250141e",
+        "src/main/java/com/portfolio/paymentrisk/storage/RowWriter.java": "7c8aa80ad799fa33be41f5f06c0f23240345e4aecc0b7992e55b94435d314a28",
+        "src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java": "6ad2eb8cfe2a94016953c7cd8210117f420120815c7f9e947a53fc13ce0376d6",
+        "src/main/java/com/portfolio/paymentrisk/storage/PaymentArchiveRows.java": "1fcee36e01f6955c77ab884034c4a470ac48424f58b39869ac42dac776252379",
+        "src/main/java/com/portfolio/paymentrisk/storage/PostgresWriter.java": "be16f13001e145f9dfb5607be212a81f6fec5a58800d9c532f508978c07d51b4",
+        "src/main/java/com/portfolio/paymentrisk/storage/BatchLimits.java": "56d274135e3dc0bcfc364e5e495f80fd6592bafc46954f4a76687f0d958f9a4d",
+        "src/main/java/com/portfolio/paymentrisk/storage/SourcePositionDigest.java": "28fedc854b6644644eacac1af24a895773687a29636e753555362748ded68254",
+        "src/main/java/com/portfolio/paymentrisk/storage/KafkaIngestion.java": "2909ec9185e6a099d3dc582d9fea380a4e78c316bc834dce96e62d4438f42a59",
+        "src/main/java/com/portfolio/paymentrisk/processor/PendingPayments.java": "28f04d6764af23714c1eb848c19914fba1bfe70cd3090ee2f58119e44e598fcf",
+        "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "ed503171e50341b33f9fb5412d8ba67512c90055d3818280db729c413ee789e8",
+        "src/main/java/com/portfolio/paymentrisk/processor/Validate.java": "9218b4cd6f58354cba17233df7a70a6b1684ed6b4ff3ec8a716654a92fa6e809",
+        "src/main/java/com/portfolio/paymentrisk/processor/StateExpiryIndex.java": "971c77d6eb8c332e6436ff30c2b55c18a798314327c40ee3598ce396bd167e8a",
+        "src/main/java/com/portfolio/paymentrisk/processor/StateHistory.java": "ca942828f4d713df01a5c69bc3dfb7db2222e6b0fb32be53a8ed9e2009a167fe",
+        "src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java": "a5c4867cc14670b85b81047f10e9c47a8005c1e1defeae178308e5ae51611d76",
+        "src/main/java/com/portfolio/paymentrisk/processor/RollingFeatures.java": "553e1b75a47aebb364d21c910de61481f0fe047862afaa3dd98e5a7b0950e6a7",
+        "src/main/java/com/portfolio/paymentrisk/domain/PolicyCatalog.java": "6138fd70716894897ae8c067d4fc944220e05de95969aa5968591f31aa8ed973",
+        "src/main/java/com/portfolio/paymentrisk/domain/Rules.java": "dcb606c3fd49a0fa67dabf698004b5b6ba9e41c844c8c182ed7851f1da2886af",
+        "src/main/java/com/portfolio/paymentrisk/domain/Audit.java": "92e3a0c5f504ce143664b86bd88bffce3d8d0a9f6e78ccfa3807a0da473be215",
+        "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03",
+        "src/main/java/com/portfolio/paymentrisk/domain/RiskFeatures.java": "9d44dc774f90d9e952bef92b34762b294b66bf746f53e6420c00c300bc18f025",
+        "src/main/java/com/portfolio/paymentrisk/sink/AvroKafkaSerializer.java": "7824c2fe257d43c0febdbcf6e98924f5e65eb7d8c1be811e6300e2c0a59c4e04",
+        "src/main/java/com/portfolio/paymentrisk/config/AppConfig.java": "7b63e7c782ab11baa58eb4c74d8117d84ce3bcc3786180ddc79bf44128b3f6e0",
+        "src/main/java/com/portfolio/paymentrisk/source/RawDeserializer.java": "89959a6a25c34a6cd2c5d4a4af0e2684b3d79ad638a4d85214292ff20484b467",
+        "src/main/java/com/portfolio/paymentrisk/source/RawRecord.java": "50172585e29e52dc07e3c4d346d31f1db5983978e8702fff7677231ebfeb1fe0",
+        "src/main/java/com/portfolio/paymentrisk/serialization/AvroCodec.java": "16a2ae043adea040f4642742149e1df183a6a650f4caa34451253a1f2f24fa7c",
+        "src/main/java/com/portfolio/paymentrisk/tools/CustomerScenarios.java": "5ddd204a91eb6368237b9ab59dcdb3cfdb7e8fb5497c9cb82800c86649e1190f",
+        "src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java": "80be12b55b93432af1399d48f3dda4b1b6e6b5d9f43aaac298d2a911d868efec",
+        "src/main/java/com/portfolio/paymentrisk/tools/ProjectionBootstrap.java": "ca4c00484d9811d283d44a98d62ee5b84988a342266bb9cfb8dbaaec55af42cb",
+        "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+        "src/main/java/com/portfolio/paymentrisk/tools/ConsumerOffsets.java": "fdf004ecd4c41ab14f6e2330e47a3c6db8b44f9ef5150d8dda0a60719efdff37",
+        "src/main/java/com/portfolio/paymentrisk/tools/SinkBenchmarkProducer.java": "d9f2c4f3750fe772f907084e447f0450e61e3ec7b131447d0dcc84cea15df632",
+        "src/main/java/com/portfolio/paymentrisk/tools/PipelineAudit.java": "8e78a66011048654caf5bfe4e56b05c8ef4cc0ab844c57733c01aa64b91a2407",
+        "src/main/java/com/portfolio/paymentrisk/tools/ClickHouseWriter.java": "4e15a7763f907f420b74b005acb19fa9a192e9c0393d93f26884f344fc8c9731",
+        "src/main/java/com/portfolio/paymentrisk/tools/CustomerSimulation.java": "ce5fdd0261640a7b09acc200a6d77cbb0717415b759f29baf977dc11d67f7c7a",
+        "src/main/java/com/portfolio/paymentrisk/tools/ProcessingOutcomeRows.java": "6623196a409254fced766b952232a661ea1f6a2cc38a9ada1e02d659589dafb2",
+        "src/main/java/com/portfolio/paymentrisk/tools/BenchmarkScenario.java": "c1b2bed6fa47ef729a0e0b9e5369c60afa87f9cac9b9d87b288c8bff387f3dbf",
+        "src/main/java/com/portfolio/paymentrisk/tools/PlatformCli.java": "017541a03b8d4dd7fb6939d51e72a512b3090138b163f00b8fdb25436b712322",
+        "src/main/java/com/portfolio/paymentrisk/tools/PaymentArchiver.java": "c641e0bc6ada9da0be65ad47da02d910f362f6c2c20255e10a27a404a9c42109",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerReplay.java": "773c482e33073edf660436b9733254408232374e8cfbe2c49340389be8e6d3b4",
+        "src/main/java/com/portfolio/paymentrisk/tools/IntegrationScenario.java": "3b714c223a14e02d87503d4928a4a59193fd87dc6ce79b2c9f2bc5d87d4d4735",
+        "src/main/java/com/portfolio/paymentrisk/tools/RuleUpdateScenario.java": "479753b871a157cd6f227148ddf71bc7855ef632d2c7f86e44243ff2d6e8aa16",
+        "src/main/java/com/portfolio/paymentrisk/tools/ArchiveScenario.java": "9027435f793fc05c0bf6d854dc64cddada29a42068b52237322f778f524f6948",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerMetrics.java": "341ecf7dcb6793e53d8ab812cec4a16a794912536a5bb1ce6c955c183fb7fd02",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerRows.java": "278ca485e59013788a3ef5279d7173f345b68760d69accfc93134ba683b4e9e8",
+        "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "72b0471fed37f8dd09ffb3c4d4e9bdf72da2dfed651cea2645abf811db3152da",
+        "src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratedPayments.java": "48fadc3337f976733f00cb627b0c8322de105716285abe94937d3ffc40ae2bd3",
+        "src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratorConfig.java": "106aa56c732edc4e365cab938db7b40ca6fe1b1602c9d626ca8bba291cde2705",
+        "scripts/benchmark-full-pipeline.py": "63ad25b0be7d11d78a3bab1645400340c25b7523e5b12e41e44f447fb2a66f2c",
+        "scripts/benchmark-clickhouse-kafka.py": "cc8d6428a5415f81d07402562c66494aaa54d1a227b6c7efc16f5631a39d046f",
+        "docker-compose.yml": "7cbebe480f22292ccfabf0c38d51d01fbd2e7ae780f341974bb7f043bf2e5d9f",
+        "docker-compose.clickhouse-benchmark.yml": "b07a953dbdd4624fb2c9eb372c8903fa28b6519f1ffe2c18a272549fa539c137"
+      },
+      "resources": {
+        "flink_parallelism": 3,
+        "taskmanager_process_memory_mib": 2048,
+        "jobmanager_process_memory_mib": 1600,
+        "flink_cpu_limit": null,
+        "producer_cpus": 1,
+        "producer_memory_mib": 512,
+        "sink": {
+          "connect": {
+            "image": "payment-risk-clickhouse-connect:1.7.0",
+            "cpus": 1.0,
+            "memory_bytes": 1073741824
+          },
+          "keeper": {
+            "image": "clickhouse/clickhouse-server:26.8.2.7",
+            "cpus": 1.0,
+            "memory_bytes": 536870912
+          },
+          "benchmark-clickhouse": {
+            "image": "clickhouse/clickhouse-server:26.8.2.7",
+            "cpus": 2.0,
+            "memory_bytes": 2147483648
+          }
+        }
+      },
+      "expected_payments": 22001,
+      "publishing_started_at": 1791891425435,
+      "publishing_elapsed_ms": 110001,
+      "achieved_payments_per_second": 199.9981818347106,
+      "producer_elapsed_ms": 125141,
+      "transport_retries": 2263,
+      "control_records": 3,
+      "checkpoint_configuration": {
+        "mode": "exactly_once",
+        "interval": 10000,
+        "timeout": 120000,
+        "min_pause": 2000,
+        "max_concurrent": 1,
+        "externalization": {
+          "enabled": true,
+          "delete_on_cancellation": false
+        },
+        "state_backend": "EmbeddedRocksDBStateBackend",
+        "checkpoint_storage": "FileSystemCheckpointStorage",
+        "unaligned_checkpoints": false,
+        "tolerable_failed_checkpoints": 0,
+        "aligned_checkpoint_timeout": 0,
+        "checkpoints_after_tasks_finish": true,
+        "state_changelog_enabled": false,
+        "changelog_periodic_materialization_interval": 600000,
+        "changelog_storage": "memory"
+      },
+      "verification": {
+        "reference": {
+          "verified": true,
+          "assessments": 22000,
+          "maximum_retained_customer_payments": 100,
+          "labels": {
+            "APPROVE": 12697,
+            "REJECT": 49,
+            "REVIEW": 9254
+          }
+        },
+        "latency": {
+          "evaluation_ms": {
+            "p50": 10394,
+            "p95": 15033,
+            "p99": 19346
+          },
+          "storage_ms": {
+            "p50": 6226,
+            "p95": 11666,
+            "p99": 13239
+          },
+          "total_ms": {
+            "p50": 17377,
+            "p95": 22759,
+            "p99": 23708
+          }
+        },
+        "invalid": 1,
+        "late": 1,
+        "input_wire_hashes": 24268,
+        "unique_kafka_deliveries": 22002,
+        "incremental_totals": {
+          "payments": 22000,
+          "amount_minor": 122137700,
+          "risk_score_sum": 849615
+        },
+        "steady_load": {
+          "status": "clock_unstable",
+          "scope": "Offered payments to durable assessments; excludes warmup and post-publication drain",
+          "warmup_seconds": 30,
+          "window_seconds": 20,
+          "windows": [
+            {
+              "from_seconds": 30.0,
+              "to_seconds": 50.0,
+              "offered_backlog": 3531,
+              "stored_per_second": 200.25,
+              "scheduled_to_storage_p95_ms": 25291,
+              "generator_delay_p95_ms": 2407
+            },
+            {
+              "from_seconds": 50.0,
+              "to_seconds": 70.0,
+              "offered_backlog": 3066,
+              "stored_per_second": 223.25,
+              "scheduled_to_storage_p95_ms": 25293,
+              "generator_delay_p95_ms": 4726
+            },
+            {
+              "from_seconds": 70.0,
+              "to_seconds": 90.0,
+              "offered_backlog": 3531,
+              "stored_per_second": 176.75,
+              "scheduled_to_storage_p95_ms": 28309,
+              "generator_delay_p95_ms": 4726
+            },
+            {
+              "from_seconds": 90.0,
+              "to_seconds": 110.0,
+              "offered_backlog": 5531,
+              "stored_per_second": 100.0,
+              "scheduled_to_storage_p95_ms": 30361,
+              "generator_delay_p95_ms": 7656
+            }
+          ],
+          "criteria": {
+            "minimum_windows": 4,
+            "minimum_achieved_rate_fraction": 0.95,
+            "maximum_generator_p95_ms": 1000,
+            "maximum_backlog_growth_per_second": 4.0,
+            "maximum_latency_growth_ms": 2529.1000000000004
+          },
+          "backlog_growth_per_second": 32.325,
+          "latency_growth_ms": 5070,
+          "reason": "Wall time advanced beyond the complete monotonic publication interval; latency/backlog windows cannot qualify this rate",
+          "unqualified_wall_clock_status": "generator_limited"
+        },
+        "verified_aggregate_buckets": 18,
+        "timing": {
+          "status": "clock_unstable",
+          "wall_advance_lower_bound_ms": 7650,
+          "negative_stage_durations": 0,
+          "scope": "One-sided clock consistency check, not proof of synchronization"
+        },
+        "exact_expected_event_set": true
+      },
+      "post_run_analysis": {
+        "description": "Clock consistency, exact event-set comparison and per-bucket MV reconciliation from retained evidence; no new load trial",
+        "script_sha256": "7c48204ed911c9724b80f377f6df060337ef9f9e0bed09bf7bec6137f1184a9f"
+      },
+      "checkpoint_counts": {
+        "restored": 0,
+        "total": 15,
+        "in_progress": 0,
+        "completed": 14,
+        "failed": 1
+      },
+      "checkpoint_duration_ms": {
+        "min": 181,
+        "max": 947,
+        "avg": 599,
+        "p50": 588.0,
+        "p90": 844.0,
+        "p95": 947.0,
+        "p99": 947.0,
+        "p999": 947.0
+      },
+      "operators": [
+        {
+          "name": "Source: show-d38208f8f504.payments -> validate-payments",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "Source: show-d38208f8f504.rules -> validate-rules -> Timestamps/Watermarks",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "deduplicate",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "validate-transaction-identity",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "customer-risk -> (show-d38208f8f504.decisions: Writer -> show-d38208f8f504.decisions: Committer, show-d38208f8f504.late: Writer -> show-d38208f8f504.late: Committer)",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "show-d38208f8f504.dlq: Writer -> show-d38208f8f504.dlq: Committer",
+          "parallelism": 3,
+          "status": "RUNNING"
+        }
+      ]
+    },
+    {
+      "run_id": "show-a70349ebce65",
+      "status": "COMPLETE",
+      "config": {
+        "seed": 7,
+        "customers": 550,
+        "min_payments": 100,
+        "max_payments": 100,
+        "history_minutes": 1440,
+        "publish_rate": 500,
+        "retry_percent": 10,
+        "ordinary_amount_min": 250,
+        "ordinary_amount_max": 15000,
+        "large_amount_min": 80000,
+        "large_amount_max": 150000,
+        "profiles": {
+          "normal": 45,
+          "new_device": 10,
+          "takeover": 10,
+          "card_testing": 5,
+          "low_burst": 5,
+          "trusted_device": 5,
+          "known_devices": 10,
+          "checkout_retry": 10
+        }
+      },
+      "arguments": {
+        "rate": 500,
+        "duration_seconds": 110,
+        "historical": false,
+        "restart_flink": true
+      },
+      "source_commit": "2a75849bf55b4b23c435893e266d0f17ed9ba0ad",
+      "source_dirty": true,
+      "source_sha256": {
+        "src/main/java/com/portfolio/paymentrisk/PaymentRiskJob.java": "64d8997bfbc520c8322f8538d5edd26e2fd70811abffb7e5a83344ea82e5c951",
+        "src/main/java/com/portfolio/paymentrisk/Json.java": "bb88e6378ef41a60a3df71de5e8481c99aefb557fe29f72973f5f9a1b250141e",
+        "src/main/java/com/portfolio/paymentrisk/storage/RowWriter.java": "7c8aa80ad799fa33be41f5f06c0f23240345e4aecc0b7992e55b94435d314a28",
+        "src/main/java/com/portfolio/paymentrisk/storage/DurableKafkaBatch.java": "6ad2eb8cfe2a94016953c7cd8210117f420120815c7f9e947a53fc13ce0376d6",
+        "src/main/java/com/portfolio/paymentrisk/storage/PaymentArchiveRows.java": "1fcee36e01f6955c77ab884034c4a470ac48424f58b39869ac42dac776252379",
+        "src/main/java/com/portfolio/paymentrisk/storage/PostgresWriter.java": "be16f13001e145f9dfb5607be212a81f6fec5a58800d9c532f508978c07d51b4",
+        "src/main/java/com/portfolio/paymentrisk/storage/BatchLimits.java": "56d274135e3dc0bcfc364e5e495f80fd6592bafc46954f4a76687f0d958f9a4d",
+        "src/main/java/com/portfolio/paymentrisk/storage/SourcePositionDigest.java": "28fedc854b6644644eacac1af24a895773687a29636e753555362748ded68254",
+        "src/main/java/com/portfolio/paymentrisk/storage/KafkaIngestion.java": "2909ec9185e6a099d3dc582d9fea380a4e78c316bc834dce96e62d4438f42a59",
+        "src/main/java/com/portfolio/paymentrisk/processor/PendingPayments.java": "28f04d6764af23714c1eb848c19914fba1bfe70cd3090ee2f58119e44e598fcf",
+        "src/main/java/com/portfolio/paymentrisk/processor/CustomerRiskProcessor.java": "ed503171e50341b33f9fb5412d8ba67512c90055d3818280db729c413ee789e8",
+        "src/main/java/com/portfolio/paymentrisk/processor/Validate.java": "9218b4cd6f58354cba17233df7a70a6b1684ed6b4ff3ec8a716654a92fa6e809",
+        "src/main/java/com/portfolio/paymentrisk/processor/StateExpiryIndex.java": "971c77d6eb8c332e6436ff30c2b55c18a798314327c40ee3598ce396bd167e8a",
+        "src/main/java/com/portfolio/paymentrisk/processor/StateHistory.java": "ca942828f4d713df01a5c69bc3dfb7db2222e6b0fb32be53a8ed9e2009a167fe",
+        "src/main/java/com/portfolio/paymentrisk/processor/Deduplicate.java": "a5c4867cc14670b85b81047f10e9c47a8005c1e1defeae178308e5ae51611d76",
+        "src/main/java/com/portfolio/paymentrisk/processor/RollingFeatures.java": "553e1b75a47aebb364d21c910de61481f0fe047862afaa3dd98e5a7b0950e6a7",
+        "src/main/java/com/portfolio/paymentrisk/domain/PolicyCatalog.java": "6138fd70716894897ae8c067d4fc944220e05de95969aa5968591f31aa8ed973",
+        "src/main/java/com/portfolio/paymentrisk/domain/Rules.java": "dcb606c3fd49a0fa67dabf698004b5b6ba9e41c844c8c182ed7851f1da2886af",
+        "src/main/java/com/portfolio/paymentrisk/domain/Audit.java": "92e3a0c5f504ce143664b86bd88bffce3d8d0a9f6e78ccfa3807a0da473be215",
+        "src/main/java/com/portfolio/paymentrisk/domain/RiskEngine.java": "39290d78253ca45e03f802ed2510babe236c89196363d90260023af735f1cf03",
+        "src/main/java/com/portfolio/paymentrisk/domain/RiskFeatures.java": "9d44dc774f90d9e952bef92b34762b294b66bf746f53e6420c00c300bc18f025",
+        "src/main/java/com/portfolio/paymentrisk/sink/AvroKafkaSerializer.java": "7824c2fe257d43c0febdbcf6e98924f5e65eb7d8c1be811e6300e2c0a59c4e04",
+        "src/main/java/com/portfolio/paymentrisk/config/AppConfig.java": "7b63e7c782ab11baa58eb4c74d8117d84ce3bcc3786180ddc79bf44128b3f6e0",
+        "src/main/java/com/portfolio/paymentrisk/source/RawDeserializer.java": "89959a6a25c34a6cd2c5d4a4af0e2684b3d79ad638a4d85214292ff20484b467",
+        "src/main/java/com/portfolio/paymentrisk/source/RawRecord.java": "50172585e29e52dc07e3c4d346d31f1db5983978e8702fff7677231ebfeb1fe0",
+        "src/main/java/com/portfolio/paymentrisk/serialization/AvroCodec.java": "16a2ae043adea040f4642742149e1df183a6a650f4caa34451253a1f2f24fa7c",
+        "src/main/java/com/portfolio/paymentrisk/tools/CustomerScenarios.java": "5ddd204a91eb6368237b9ab59dcdb3cfdb7e8fb5497c9cb82800c86649e1190f",
+        "src/main/java/com/portfolio/paymentrisk/tools/DecisionMaterializer.java": "80be12b55b93432af1399d48f3dda4b1b6e6b5d9f43aaac298d2a911d868efec",
+        "src/main/java/com/portfolio/paymentrisk/tools/ProjectionBootstrap.java": "ca4c00484d9811d283d44a98d62ee5b84988a342266bb9cfb8dbaaec55af42cb",
+        "src/main/java/com/portfolio/paymentrisk/tools/BoundedPaymentPublisher.java": "83f157f7a0aa32d02d92f3dac62e323da04aa9997f818b88a45eb165e1fbb7dc",
+        "src/main/java/com/portfolio/paymentrisk/tools/ConsumerOffsets.java": "fdf004ecd4c41ab14f6e2330e47a3c6db8b44f9ef5150d8dda0a60719efdff37",
+        "src/main/java/com/portfolio/paymentrisk/tools/SinkBenchmarkProducer.java": "d9f2c4f3750fe772f907084e447f0450e61e3ec7b131447d0dcc84cea15df632",
+        "src/main/java/com/portfolio/paymentrisk/tools/PipelineAudit.java": "8e78a66011048654caf5bfe4e56b05c8ef4cc0ab844c57733c01aa64b91a2407",
+        "src/main/java/com/portfolio/paymentrisk/tools/ClickHouseWriter.java": "4e15a7763f907f420b74b005acb19fa9a192e9c0393d93f26884f344fc8c9731",
+        "src/main/java/com/portfolio/paymentrisk/tools/CustomerSimulation.java": "ce5fdd0261640a7b09acc200a6d77cbb0717415b759f29baf977dc11d67f7c7a",
+        "src/main/java/com/portfolio/paymentrisk/tools/ProcessingOutcomeRows.java": "6623196a409254fced766b952232a661ea1f6a2cc38a9ada1e02d659589dafb2",
+        "src/main/java/com/portfolio/paymentrisk/tools/BenchmarkScenario.java": "c1b2bed6fa47ef729a0e0b9e5369c60afa87f9cac9b9d87b288c8bff387f3dbf",
+        "src/main/java/com/portfolio/paymentrisk/tools/PlatformCli.java": "017541a03b8d4dd7fb6939d51e72a512b3090138b163f00b8fdb25436b712322",
+        "src/main/java/com/portfolio/paymentrisk/tools/PaymentArchiver.java": "c641e0bc6ada9da0be65ad47da02d910f362f6c2c20255e10a27a404a9c42109",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerReplay.java": "773c482e33073edf660436b9733254408232374e8cfbe2c49340389be8e6d3b4",
+        "src/main/java/com/portfolio/paymentrisk/tools/IntegrationScenario.java": "3b714c223a14e02d87503d4928a4a59193fd87dc6ce79b2c9f2bc5d87d4d4735",
+        "src/main/java/com/portfolio/paymentrisk/tools/RuleUpdateScenario.java": "479753b871a157cd6f227148ddf71bc7855ef632d2c7f86e44243ff2d6e8aa16",
+        "src/main/java/com/portfolio/paymentrisk/tools/ArchiveScenario.java": "9027435f793fc05c0bf6d854dc64cddada29a42068b52237322f778f524f6948",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerMetrics.java": "341ecf7dcb6793e53d8ab812cec4a16a794912536a5bb1ce6c955c183fb7fd02",
+        "src/main/java/com/portfolio/paymentrisk/tools/MaterializerRows.java": "278ca485e59013788a3ef5279d7173f345b68760d69accfc93134ba683b4e9e8",
+        "src/main/java/com/portfolio/paymentrisk/tools/ShowcaseProducer.java": "72b0471fed37f8dd09ffb3c4d4e9bdf72da2dfed651cea2645abf811db3152da",
+        "src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratedPayments.java": "48fadc3337f976733f00cb627b0c8322de105716285abe94937d3ffc40ae2bd3",
+        "src/main/java/com/portfolio/paymentrisk/tools/generation/GeneratorConfig.java": "106aa56c732edc4e365cab938db7b40ca6fe1b1602c9d626ca8bba291cde2705",
+        "scripts/benchmark-full-pipeline.py": "53f7daed497511e61ffb8a15afb1d418be40e90f6fd9e367c9c6da94e15332de",
+        "scripts/benchmark-clickhouse-kafka.py": "cc8d6428a5415f81d07402562c66494aaa54d1a227b6c7efc16f5631a39d046f",
+        "docker-compose.yml": "7cbebe480f22292ccfabf0c38d51d01fbd2e7ae780f341974bb7f043bf2e5d9f",
+        "docker-compose.clickhouse-benchmark.yml": "b07a953dbdd4624fb2c9eb372c8903fa28b6519f1ffe2c18a272549fa539c137"
+      },
+      "resources": {
+        "flink_parallelism": 3,
+        "taskmanager_process_memory_mib": 2048,
+        "jobmanager_process_memory_mib": 1600,
+        "flink_cpu_limit": null,
+        "producer_cpus": 1,
+        "producer_memory_mib": 512,
+        "sink": {
+          "connect": {
+            "image": "payment-risk-clickhouse-connect:1.7.0",
+            "cpus": 1.0,
+            "memory_bytes": 1073741824
+          },
+          "keeper": {
+            "image": "clickhouse/clickhouse-server:26.8.2.7",
+            "cpus": 1.0,
+            "memory_bytes": 536870912
+          },
+          "benchmark-clickhouse": {
+            "image": "clickhouse/clickhouse-server:26.8.2.7",
+            "cpus": 2.0,
+            "memory_bytes": 2147483648
+          }
+        }
+      },
+      "expected_payments": 55001,
+      "publishing_started_at": 1791891643771,
+      "publishing_elapsed_ms": 110017,
+      "achieved_payments_per_second": 499.9227392130307,
+      "producer_elapsed_ms": 134850,
+      "transport_retries": 5624,
+      "control_records": 3,
+      "recovery": {
+        "checkpoint_before": 10,
+        "requested_at": 1791891741584,
+        "restored": {
+          "id": 10,
+          "restore_timestamp": 1791891758834,
+          "is_savepoint": false,
+          "external_path": "s3://payment-risk/checkpoints/cb6f00d5fe3e10be92b23cde5f741a10/chk-10"
+        }
+      },
+      "checkpoint_configuration": {
+        "mode": "exactly_once",
+        "interval": 10000,
+        "timeout": 120000,
+        "min_pause": 2000,
+        "max_concurrent": 1,
+        "externalization": {
+          "enabled": true,
+          "delete_on_cancellation": false
+        },
+        "state_backend": "EmbeddedRocksDBStateBackend",
+        "checkpoint_storage": "FileSystemCheckpointStorage",
+        "unaligned_checkpoints": false,
+        "tolerable_failed_checkpoints": 0,
+        "aligned_checkpoint_timeout": 0,
+        "checkpoints_after_tasks_finish": true,
+        "state_changelog_enabled": false,
+        "changelog_periodic_materialization_interval": 600000,
+        "changelog_storage": "memory"
+      },
+      "verification": {
+        "reference": {
+          "verified": true,
+          "assessments": 55000,
+          "maximum_retained_customer_payments": 100,
+          "labels": {
+            "APPROVE": 31784,
+            "REJECT": 133,
+            "REVIEW": 23083
+          }
+        },
+        "latency": {
+          "evaluation_ms": {
+            "p50": 10405,
+            "p95": 30470,
+            "p99": 33436
+          },
+          "storage_ms": {
+            "p50": 5003,
+            "p95": 12255,
+            "p99": 13681
+          },
+          "total_ms": {
+            "p50": 19189,
+            "p95": 33782,
+            "p99": 36534
+          }
+        },
+        "invalid": 1,
+        "late": 1,
+        "negative_stage_durations": 0,
+        "input_wire_hashes": 60629,
+        "unique_kafka_deliveries": 55002,
+        "incremental_totals": {
+          "payments": 55000,
+          "amount_minor": 308306385,
+          "risk_score_sum": 2122990
+        },
+        "steady_load": {
+          "status": "clock_unstable",
+          "scope": "Offered payments to durable assessments; excludes warmup and post-publication drain",
+          "warmup_seconds": 30,
+          "window_seconds": 20,
+          "windows": [
+            {
+              "from_seconds": 30.0,
+              "to_seconds": 50.0,
+              "offered_backlog": 11829,
+              "stored_per_second": 500.6,
+              "scheduled_to_storage_p95_ms": 25967,
+              "generator_delay_p95_ms": 2931
+            },
+            {
+              "from_seconds": 50.0,
+              "to_seconds": 70.0,
+              "offered_backlog": 10355,
+              "stored_per_second": 573.7,
+              "scheduled_to_storage_p95_ms": 29666,
+              "generator_delay_p95_ms": 5864
+            },
+            {
+              "from_seconds": 70.0,
+              "to_seconds": 90.0,
+              "offered_backlog": 11816,
+              "stored_per_second": 426.95,
+              "scheduled_to_storage_p95_ms": 42502,
+              "generator_delay_p95_ms": 8792
+            },
+            {
+              "from_seconds": 90.0,
+              "to_seconds": 110.0,
+              "offered_backlog": 15352,
+              "stored_per_second": 323.2,
+              "scheduled_to_storage_p95_ms": 42646,
+              "generator_delay_p95_ms": 8792
+            }
+          ],
+          "criteria": {
+            "minimum_windows": 4,
+            "minimum_achieved_rate_fraction": 0.95,
+            "maximum_generator_p95_ms": 1000,
+            "maximum_backlog_growth_per_second": 10.0,
+            "maximum_latency_growth_ms": 2596.7000000000003
+          },
+          "backlog_growth_per_second": 60.15,
+          "latency_growth_ms": 16679,
+          "reason": "Wall time advanced beyond the complete monotonic publication interval; latency/backlog windows cannot qualify this rate",
+          "unqualified_wall_clock_status": "generator_limited"
+        },
+        "verified_aggregate_buckets": 18,
+        "timing": {
+          "status": "clock_unstable",
+          "wall_advance_lower_bound_ms": 8773,
+          "negative_stage_durations": 0,
+          "scope": "One-sided clock consistency check, not proof of synchronization"
+        },
+        "exact_expected_event_set": true
+      },
+      "post_run_analysis": {
+        "description": "Clock consistency, exact event-set comparison and per-bucket MV reconciliation from retained evidence; no new load trial",
+        "script_sha256": "7c48204ed911c9724b80f377f6df060337ef9f9e0bed09bf7bec6137f1184a9f"
+      },
+      "checkpoint_counts": {
+        "restored": 1,
+        "total": 15,
+        "in_progress": 0,
+        "completed": 14,
+        "failed": 1
+      },
+      "checkpoint_duration_ms": {
+        "min": 177,
+        "max": 2655,
+        "avg": 835,
+        "p50": 737.5,
+        "p90": 1814.5,
+        "p95": 2655.0,
+        "p99": 2655.0,
+        "p999": 2655.0
+      },
+      "operators": [
+        {
+          "name": "Source: show-a70349ebce65.payments -> validate-payments",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "Source: show-a70349ebce65.rules -> validate-rules -> Timestamps/Watermarks",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "deduplicate",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "validate-transaction-identity",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "customer-risk -> (show-a70349ebce65.decisions: Writer -> show-a70349ebce65.decisions: Committer, show-a70349ebce65.late: Writer -> show-a70349ebce65.late: Committer)",
+          "parallelism": 3,
+          "status": "RUNNING"
+        },
+        {
+          "name": "show-a70349ebce65.dlq: Writer -> show-a70349ebce65.dlq: Committer",
+          "parallelism": 3,
+          "status": "RUNNING"
+        }
+      ]
+    }
+  ]
+}
