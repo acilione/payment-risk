@@ -53,9 +53,9 @@ def compose(*args, **kwargs):
     return subprocess.run(COMPOSE + list(args), cwd=ROOT, text=True, check=True, **kwargs)
 
 
-def resources():
+def resources(services=('connect', 'keeper', 'benchmark-clickhouse', 'benchmark-postgres')):
     result = {}
-    for service in ['connect', 'keeper', 'benchmark-clickhouse', 'benchmark-postgres']:
+    for service in services:
         container = compose('ps', '-q', service, capture_output=True).stdout.strip()
         inspection = json.loads(subprocess.check_output(['docker', 'inspect', container], text=True))[0]
         result[service] = {'image': inspection['Config']['Image'],
@@ -162,8 +162,8 @@ def duplicate_case(source, run, expected):
         api('connectors/' + name, method='DELETE')
 
 
-def columns():
-    schema = json.loads((ROOT / 'schemas/risk-decision.avsc').read_text())
+def columns(schema_name='risk-decision'):
+    schema = json.loads((ROOT / ('schemas/' + schema_name + '.avsc')).read_text())
     def datatype(value):
         if isinstance(value, str):
             return {'string': 'String', 'long': 'Int64', 'int': 'Int32', 'boolean': 'Bool'}[value]
@@ -193,7 +193,7 @@ def tables(name, aggregate=True):
             GROUP BY bucket, decision, currency""")
 
 
-def connector(name, topic, tasks=1):
+def connector(name, topic, tasks=1, coordinate_prefix='source_'):
     config = {
         'connector.class': 'com.clickhouse.kafka.connect.ClickHouseSinkConnector',
         'tasks.max': str(tasks), 'topics': topic, 'hostname': 'benchmark-clickhouse',
@@ -210,9 +210,9 @@ def connector(name, topic, tasks=1):
         'consumer.override.max.poll.records': '1000',
         'errors.tolerance': 'none', 'errors.retry.timeout': '60000',
         'transforms': 'source', 'transforms.source.type': 'org.apache.kafka.connect.transforms.InsertField$Value',
-        'transforms.source.topic.field': 'source_topic',
-        'transforms.source.partition.field': 'source_partition',
-        'transforms.source.offset.field': 'source_offset'}
+        'transforms.source.topic.field': coordinate_prefix + 'topic',
+        'transforms.source.partition.field': coordinate_prefix + 'partition',
+        'transforms.source.offset.field': coordinate_prefix + 'offset'}
     api('connectors', {'name': name, 'config': config}, 'POST')
 
 

@@ -17,6 +17,28 @@ import org.junit.jupiter.api.Test;
 
 class ProductionSafetyTest {
   @Test
+  void pipelineAuditChecksCompleteEvidenceAndRejectsRepeatedInputs() throws Exception {
+    var payment = RiskEngineTest.tx("event", 1000, 100, "device", "APPROVED");
+    var pair = Json.object();
+    pair.set("payment", payment);
+    pair.set("decision", decision(2000));
+    String line = Json.write(pair) + "\n";
+    var verified = PipelineAudit.verify(new java.io.BufferedReader(new java.io.StringReader(line)));
+    assertEquals(1, verified.path("assessments").asLong());
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            PipelineAudit.verify(
+                new java.io.BufferedReader(new java.io.StringReader(line + line))));
+    ((ObjectNode) pair.path("decision").path("rule_evidence").get(0)).put("observed", 999);
+    assertThrows(
+        AssertionError.class,
+        () ->
+            PipelineAudit.verify(
+                new java.io.BufferedReader(new java.io.StringReader(Json.write(pair) + "\n"))));
+  }
+
+  @Test
   void sinkBenchmarkPreservesBusinessIdentityAcrossDeliveryVariants() {
     var template = decision(2000);
     var initial = SinkBenchmarkProducer.assessment(template, "bench", 1, "initial");

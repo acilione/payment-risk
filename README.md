@@ -728,6 +728,43 @@ Keeper and the target table must represent the same retained history. Never clea
 
 References: [official connector configuration and guarantees](https://clickhouse.com/docs/integrations/connectors/data-ingestion/kafka/kafka-clickhouse-connect-sink), [incremental materialized views](https://clickhouse.com/docs/concepts/features/materialized-views/incremental-materialized-view), and [insert retry deduplication](https://clickhouse.com/docs/concepts/features/operations/insert/deduplicating-inserts-on-retries).
 
+### Full pipeline evaluation test
+
+The [full pipeline driver](scripts/benchmark-full-pipeline.py) generates new payment histories and sends them through Kafka, Flink, the official connector and ClickHouse. It bypasses the custom materializer and uses fresh topics, connector state and tables for each run.
+
+After building the images above, stop the previous showcase and run:
+
+```bash
+docker compose --env-file .env -f docker-compose.clickhouse-benchmark.yml stop
+make showcase-stop
+python3 scripts/benchmark-full-pipeline.py --historical
+python3 scripts/benchmark-full-pipeline.py --rate 200 --duration-seconds 110
+python3 scripts/benchmark-full-pipeline.py --rate 500 --duration-seconds 110 --restart-flink
+```
+
+The driver starts the required services, saves its configuration and evidence under `artifacts/full-pipeline/<run-id>/`, and stops the Flink job with a savepoint after verification. It removes its connectors and retains the services and data for inspection. It refuses to start while another Flink job or the showcase materializer is running. At least 3 GiB of free host-disk space is required after the images are built.
+
+Verification covers the complete path:
+
+- Every acknowledged input is read back from Kafka and checked against its source coordinates and exact byte hash, including transport retries, malformed input and late payments.
+- Every Flink assessment is compared field by field with a reference evaluation reconstructed from that customer's ordered payments. This checks scores, labels, rule observations, triggered rules and audit fields. The reference uses the same policy but batch feature calculations instead of Flink's managed incremental state; it tests implementation consistency, not real-world fraud accuracy.
+- Every committed decision, invalid-input record and late outcome must appear exactly once in ClickHouse with unchanged content. The decision IDs must match the expected payment set exactly.
+- Each incremental aggregate bucket must match Kafka's counts, amounts and score sums for its event-time interval, label and currency.
+
+The audit streams physical rows once per isolated table into a SQLite ledger. Uniqueness checks and ordering use disk-backed indexes; the reference evaluator retains at most one customer's 100 payments. Progress polling reads table metadata every five seconds. The live workloads exceed the 64-payment threshold for Flink's incremental feature state; the historical case retains the generator's multi-hour behavioral sequences.
+
+The [recorded trials](docs/evidence/full-pipeline-clickhouse.json) all passed reconciliation and reference evaluation:
+
+| Case | Evaluated payments | Transport retries | APPROVE | REVIEW | REJECT |
+| ---- | -----------------: | ----------------: | ------: | -----: | -----: |
+| Historical behavior scenarios | 337 | 44 | 325 | 12 | 0 |
+| Requested 200 payments/second for 110 seconds | 22,000 | 2,263 | 12,697 | 9,254 | 49 |
+| Requested 500 payments/second for 110 seconds, worker interruption | 55,000 | 5,624 | 31,784 | 23,083 | 133 |
+
+Each case also stored one invalid-input record and one late outcome. Across the three runs, all 85,283 acknowledged input records were verified in Kafka. In the interruption case, the driver killed the TaskManager after approximately 80% of publication, restarted it, and confirmed restoration from checkpoint 10. All 55,000 decisions then reconciled without missing or duplicate results. The connector and database remained running during that test.
+
+Both live runs detected wall-clock drift relative to the producer's monotonic clock: at least 7.65 and 8.77 seconds respectively. They therefore report `clock_unstable` and **do not qualify sustainable throughput or latency**. Raw timings remain in the evidence for diagnosis. A stable-clock environment and repeated, longer trials are needed for capacity conclusions. These results establish the tested Flink recovery and evaluation behavior; the business-uniqueness and connector-recovery limits above still apply.
+
 ### Remaining limits
 
 - PostgreSQL prevents duplicate stored assessments permanently while identities are retained. Flink's input deduplication remains bounded by its processing-time TTL. Arbitrary historical resubmission into live state is not supported; a durable acceptance service before Flink is needed if the source cannot honor that contract.
