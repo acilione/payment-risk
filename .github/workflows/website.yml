@@ -43,7 +43,7 @@ jobs:
           cp -r web/dist/. artifacts/site/payment-risk/
           python3 -m http.server 23001 --bind 127.0.0.1 --directory artifacts/site > artifacts/website-server.log 2>&1 &
           python3 scripts/verify-website.py --url http://127.0.0.1:23001/payment-risk/ --static
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with: {name: website-browser-evidence, path: artifacts/website/}
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
