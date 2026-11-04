@@ -1,5 +1,5 @@
 # MinIO community images are no longer published. Build the upstream releases.
-FROM golang:1.26.8-alpine3.23@sha256:a8fa79c5bd40d880b52bd3b6d7669ecdcfd00e85facdd427d279efb5ddd79cb1 AS build
+FROM golang:1.27.3-alpine3.23@sha256:8a5046497cda39860b832ffdbe8dd66018a0f05bb01352f533a36e7e2ced66a0 AS build
 RUN apk add --no-cache git
 WORKDIR /src
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
